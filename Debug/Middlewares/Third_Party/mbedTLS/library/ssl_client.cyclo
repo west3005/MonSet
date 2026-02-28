@@ -1,0 +1,13 @@
+../Middlewares/Third_Party/mbedTLS/library/ssl_misc.h:507:19:mbedtls_ssl_chk_buf_ptr	3
+../Middlewares/Third_Party/mbedTLS/library/ssl_misc.h:1350:20:mbedtls_ssl_handshake_set_state	1
+../Middlewares/Third_Party/mbedTLS/library/ssl_misc.h:1475:19:mbedtls_ssl_write_handshake_msg	1
+../Middlewares/Third_Party/mbedTLS/library/ssl_misc.h:2325:27:mbedtls_ssl_get_groups	3
+../Middlewares/Third_Party/mbedTLS/library/ssl_misc.h:2341:19:mbedtls_ssl_tls12_named_group_is_ecdhe	14
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:26:12:ssl_write_hostname_ext	3
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:115:12:ssl_write_alpn_ext	5
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:218:12:ssl_write_supported_groups_ext	10
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:318:12:ssl_write_client_hello_cipher_suites	7
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:437:12:ssl_write_client_hello_body	26
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:700:12:ssl_generate_random	2
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:737:12:ssl_prepare_client_hello	19
+../Middlewares/Third_Party/mbedTLS/library/ssl_client.c:915:5:mbedtls_ssl_write_client_hello	10

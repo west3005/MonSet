@@ -1,0 +1,9 @@
+C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/mbedTLS/include/psa/crypto_struct.h:89:43:psa_hash_operation_init	248	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:39:12:local_err_translation	16	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:94:12:create_merkle_leaf_value	520	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:170:12:create_merkle_internal_value	520	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:228:6:mbedtls_lms_public_init	16	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:233:6:mbedtls_lms_public_free	16	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:242:5:mbedtls_lms_import_public_key	48	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:276:5:mbedtls_lms_export_public_key	40	static
+../Middlewares/Third_Party/mbedTLS/library/lms.c:304:5:mbedtls_lms_verify	200	static

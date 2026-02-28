@@ -1,0 +1,12 @@
+../Core/Src/main.cpp:124:13:void MX_GPIO_Init()	1
+../Core/Src/main.cpp:304:1:void __static_initialization_and_destruction_0(int, int)	3
+../Core/Src/main.cpp:293:17:void Error_Handler()	2
+../Core/Src/main.cpp:195:13:void MX_USART1_UART_Init()	1
+../Core/Src/main.cpp:243:13:void MX_I2C1_Init()	1
+../Core/Src/main.cpp:211:13:void MX_USART2_UART_Init()	1
+../Core/Src/main.cpp:227:13:void MX_USART3_UART_Init()	1
+../Core/Src/main.cpp:260:13:void MX_RTC_Init()	1
+../Core/Src/main.cpp:278:13:void MX_TIM6_Init()	1
+../Core/Src/main.cpp:91:6:void SystemClock_Config()	1
+../Core/Src/main.cpp:45:16:int main()	0
+../Core/Src/main.cpp:304:1:cpp)	1

@@ -1,0 +1,14 @@
+C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/mbedTLS/include/mbedtls/cipher.h:463:37:mbedtls_cipher_info_get_mode	16	static
+C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/mbedTLS/include/mbedtls/cipher.h:484:22:mbedtls_cipher_info_get_key_bitlen	16	static
+C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/mbedTLS/include/mbedtls/cipher.h:785:19:mbedtls_cipher_get_key_bitlen	16	static
+C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/mbedTLS/include/mbedtls/ssl.h:2775:19:mbedtls_ssl_session_get_ticket_creation_time	16	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_misc.h:507:19:mbedtls_ssl_chk_buf_ptr	24	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:36:6:mbedtls_ssl_ticket_init	16	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:64:12:ssl_ticket_gen_key	64	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:118:12:ssl_ticket_update_keys	56	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:154:5:mbedtls_ssl_ticket_rotate	40	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:214:5:mbedtls_ssl_ticket_setup	40	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:299:5:mbedtls_ssl_ticket_write	104	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:400:32:ssl_ticket_select_key	24	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:418:5:mbedtls_ssl_ticket_parse	160	static
+../Middlewares/Third_Party/mbedTLS/library/ssl_ticket.c:535:6:mbedtls_ssl_ticket_free	16	static

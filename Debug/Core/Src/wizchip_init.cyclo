@@ -1,0 +1,5 @@
+../Core/Src/wizchip_init.c:11:6:WIZCHIPInitialize	4
+../Core/Src/wizchip_init.c:47:6:csEnable	1
+../Core/Src/wizchip_init.c:52:6:csDisable	1
+../Core/Src/wizchip_init.c:57:6:spiWriteByte	1
+../Core/Src/wizchip_init.c:63:9:spiReadByte	1

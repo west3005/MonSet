@@ -1,0 +1,3 @@
+../Middlewares/Third_Party/mbedTLS/library/version.c:15:14:mbedtls_version_get_number	1
+../Middlewares/Third_Party/mbedTLS/library/version.c:20:6:mbedtls_version_get_string	1
+../Middlewares/Third_Party/mbedTLS/library/version.c:26:6:mbedtls_version_get_string_full	1

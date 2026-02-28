@@ -1,0 +1,13 @@
+../Core/Src/sim800l.cpp:6:1:SIM800L::SIM800L(UART_HandleTypeDef*, GPIO_TypeDef*, uint16_t)	1
+../Core/Src/sim800l.cpp:12:6:void SIM800L::sendRaw(const char*, uint16_t)	4
+../Core/Src/sim800l.cpp:20:10:uint16_t SIM800L::readResponse(char*, uint16_t, uint32_t)	9
+../Core/Src/sim800l.cpp:45:10:uint16_t SIM800L::waitFor(char*, uint16_t, const char*, uint32_t)	9
+../Core/Src/sim800l.cpp:67:6:void SIM800L::powerOn()	1
+../Core/Src/sim800l.cpp:75:6:void SIM800L::powerOff()	1
+../Core/Src/sim800l.cpp:82:11:GsmStatus SIM800L::sendCommand(const char*, char*, uint16_t, uint32_t)	6
+../Core/Src/sim800l.cpp:103:9:uint8_t SIM800L::getSignalQuality()	2
+../Core/Src/sim800l.cpp:118:6:bool SIM800L::enableNetworkTimeSync()	2
+../Core/Src/sim800l.cpp:134:6:bool SIM800L::getCCLK(char*, uint16_t, uint32_t)	6
+../Core/Src/sim800l.cpp:152:11:GsmStatus SIM800L::init()	10
+../Core/Src/sim800l.cpp:233:10:uint16_t SIM800L::httpPost(const char*, const char*, uint16_t)	7
+../Core/Src/sim800l.cpp:291:6:void SIM800L::disconnect()	1

@@ -1,0 +1,2 @@
+../Core/Src/power_manager.cpp:14:1:PowerManager::PowerManager(RTC_HandleTypeDef*, SdBackup&)	1
+../Core/Src/power_manager.cpp:21:6:void PowerManager::enterStopMode(uint32_t)	3

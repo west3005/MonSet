@@ -1,0 +1,2 @@
+../Core/Src/mbedtls_entropy_alt.c:6:5:mbedtls_hardware_poll	1
+../Core/Src/mbedtls_entropy_alt.c:16:19:mbedtls_ms_time	1

@@ -1,0 +1,9 @@
+../Core/Src/w5500_port.c:23:6:W5500_PortInit	1
+../Core/Src/w5500_port.c:24:10:W5500_Millis	1
+../Core/Src/w5500_port.c:26:6:wizchip_select	1
+../Core/Src/w5500_port.c:27:6:wizchip_deselect	1
+../Core/Src/w5500_port.c:29:9:wizchip_read	1
+../Core/Src/w5500_port.c:34:6:wizchip_write	1
+../Core/Src/w5500_port.c:36:6:wizchip_readburst	2
+../Core/Src/w5500_port.c:40:6:wizchip_writeburst	1
+../Core/Src/w5500_port.c:44:6:W5500_HardReset	1

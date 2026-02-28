@@ -1,0 +1,13 @@
+C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/mbedTLS/include/mbedtls/cipher.h:545:22:mbedtls_cipher_info_get_block_size	16	static
+../Middlewares/Third_Party/mbedTLS/library/constant_time_impl.h:205:33:mbedtls_ct_if	24	static,ignoring_inline_asm
+../Middlewares/Third_Party/mbedTLS/library/constant_time_impl.h:271:38:mbedtls_ct_uint_lt	24	static,ignoring_inline_asm
+../Middlewares/Third_Party/mbedTLS/library/constant_time_impl.h:472:19:mbedtls_ct_error_if	24	static
+../Middlewares/Third_Party/mbedTLS/library/constant_time_impl.h:495:38:mbedtls_ct_uint_gt	16	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:47:6:mbedtls_nist_kw_init	16	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:52:5:mbedtls_nist_kw_setkey	32	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:104:6:mbedtls_nist_kw_free	16	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:118:13:calc_a_xor_t	40	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:130:5:mbedtls_nist_kw_wrap	128	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:261:12:unwrap	112	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:324:5:mbedtls_nist_kw_unwrap	96	static
+../Middlewares/Third_Party/mbedTLS/library/nist_kw.c:585:5:mbedtls_nist_kw_self_test	160	static
