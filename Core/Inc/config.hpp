@@ -134,7 +134,7 @@ constexpr uint16_t GSM_RX_BUF_SIZE  = 512;
 /* ================================================================
  * SD-карта
  * ================================================================ */
-constexpr const char* BACKUP_FILENAME = "backup.json";
+constexpr const char* BACKUP_FILENAME = "backup.jsn";
 // максимум длины одной JSONL-строки (без \r\n)
 constexpr uint16_t JSONL_LINE_MAX = 240;
 // максимум байт полезной нагрузки в одном HTTP POST (<= JSON_BUFFER_SIZE)

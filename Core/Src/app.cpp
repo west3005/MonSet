@@ -12,9 +12,10 @@
 #include <cctype>
 #include <cstring>
 #include <cstdio>
+#include <cstdint>
 
 extern "C" {
-  // HAL handles (cube *.h удалены — объявляем напрямую)
+  // HAL handles
   extern I2C_HandleTypeDef  hi2c1;
   extern UART_HandleTypeDef huart2;
   extern UART_HandleTypeDef huart3;
@@ -263,7 +264,55 @@ static int httpPostPlainW5500(const char* url,
   return -30;
 }
 
-// =================================================================
+// ============================================================================
+// Time helpers: DateTime -> unix ms (UTC, по полям DateTime)
+static bool isLeap(int y) { return ((y % 4) == 0 && (y % 100) != 0) || ((y % 400) == 0); }
+
+static uint32_t daysBeforeMonth(int y, int m)
+{
+  static const uint16_t cum[12] = {0,31,59,90,120,151,181,212,243,273,304,334};
+  uint32_t d = cum[m - 1];
+  if (m > 2 && isLeap(y)) d++;
+  return d;
+}
+
+static uint64_t toUnixMs(const DateTime& dt)
+{
+  int y = 2000 + (int)dt.year;
+  int m = (int)dt.month;
+  int d = (int)dt.date;
+
+  uint32_t days = 0;
+  for (int yy = 1970; yy < y; yy++) days += isLeap(yy) ? 366 : 365;
+  days += daysBeforeMonth(y, m);
+  days += (uint32_t)(d - 1);
+
+  uint64_t sec = (uint64_t)days * 86400ULL +
+                 (uint64_t)dt.hours * 3600ULL +
+                 (uint64_t)dt.minutes * 60ULL +
+                 (uint64_t)dt.seconds;
+
+  return sec * 1000ULL;
+}
+
+// uint64_t -> dec string (чтобы не зависеть от %llu в printf)
+static void u64_to_dec(char* out, size_t outSz, uint64_t v)
+{
+  if (!out || outSz == 0) return;
+
+  char tmp[32];
+  size_t n = 0;
+
+  do {
+    tmp[n++] = char('0' + (v % 10ULL));
+    v /= 10ULL;
+  } while (v && n < sizeof(tmp));
+
+  size_t pos = 0;
+  while (n && (pos + 1) < outSz) out[pos++] = tmp[--n];
+  out[pos] = '\0';
+}
+// ============================================================================
 
 App::App()
 : m_rtc(&hi2c1),
@@ -297,6 +346,11 @@ void App::init()
   m_rtc.init();
   m_modbus.init();
   m_sdBackup.init();
+
+  // ВАЖНО: очистить возможный старый/битый журнал (иначе в пачках останется "ts":lu)
+  // После того как убедишься, что всё ок — можешь закомментировать.
+  (void)m_sdBackup.remove();
+
   m_gsm.powerOff();
 
   m_mode = readMode();
@@ -340,27 +394,35 @@ void App::init()
     DateTime ts{};
     float val = m_sensor.read(ts);
 
+    const uint64_t unixMs = toUnixMs(ts);
+    char tsStr[24];
+    u64_to_dec(tsStr, sizeof(tsStr), unixMs);
+
     char timeStr[32]{};
     ts.formatISO8601(timeStr);
     DBG.data("val=%.3f t=%s", val, timeStr);
 
     ledBlink(1, 50);
 
-    // ---- SD журнал ----
+    // ---- SD журнал (JSONL: одна строка = один объект) ----
     char line[256];
     int lenLine = std::snprintf(
       line, sizeof(line),
-      "{\"metricId\":\"%s\",\"value\":%.3f,"
-      "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}",
+      "{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
+      "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}",
+      tsStr,
       Config::METRIC_ID,
       val,
       (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
       (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
     );
-    if (lenLine > 0) {
+
+    if (lenLine > 0 && lenLine < (int)sizeof(line)) {
       if (!m_sdBackup.appendLine(line)) {
         DBG.error("SD: appendLine failed");
       }
+    } else {
+      DBG.error("SD: snprintf line failed/overflow (len=%d)", lenLine);
     }
 
     // ---- Тестовая отправка на сервер на BOOT/WAKE ----
@@ -370,8 +432,9 @@ void App::init()
       char j[256];
       int len = std::snprintf(
         j, sizeof(j),
-        "[{\"metricId\":\"%s\",\"value\":%.3f,"
-        "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}]",
+        "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
+        "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
+        tsStr,
         Config::METRIC_ID,
         val,
         (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
@@ -386,6 +449,7 @@ void App::init()
             DBG.error("[%s] ETH not ready/link -> POST skipped", tag);
           } else {
             if (startsWith(Config::SERVER_URL, "https://")) {
+              DBG.data("TB payload (self-test): %s", j);
               http = HttpsW5500::postJson(
                 Config::SERVER_URL,
                 Config::SERVER_AUTH,
@@ -395,6 +459,7 @@ void App::init()
               );
               DBG.info("[%s] ETH HTTPS POST code=%d", tag, http);
             } else if (startsWith(Config::SERVER_URL, "http://")) {
+              DBG.data("TB payload (self-test): %s", j);
               http = httpPostPlainW5500(
                 Config::SERVER_URL,
                 Config::SERVER_AUTH,
@@ -482,11 +547,16 @@ void App::transmitSingle(float value, const DateTime& dt)
     return;
   }
 
+  const uint64_t unixMs = toUnixMs(dt);
+  char tsStr[24];
+  u64_to_dec(tsStr, sizeof(tsStr), unixMs);
+
   char j[256];
   int len = std::snprintf(
     j, sizeof(j),
-    "[{\"metricId\":\"%s\",\"value\":%.3f,"
-    "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}]",
+    "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
+    "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
+    tsStr,
     Config::METRIC_ID,
     value,
     (unsigned)dt.year, (unsigned)dt.month, (unsigned)dt.date,
@@ -524,6 +594,9 @@ void App::retransmitBackup()
                 ok ? 1 : 0, (unsigned)lines, (unsigned long)used);
       return;
     }
+
+    DBG.data("TB payload len=%u", (unsigned)std::strlen(m_json));
+    DBG.data("TB payload: %s", m_json);
 
     DBG.info("Send chunk: lines=%u bytesUsed=%lu payloadLen=%u",
              (unsigned)lines, (unsigned long)used, (unsigned)std::strlen(m_json));
