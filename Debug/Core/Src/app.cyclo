@@ -14,7 +14,7 @@
 ../Core/Src/app.cpp:286:6:void App::ledOff()	1
 ../Core/Src/app.cpp:288:6:void App::ledBlink(uint8_t, uint32_t)	2
 ../Core/Src/app.cpp:293:6:void App::init()	3
-../Core/Src/app.cpp:474:6:void App::transmitSingle(float, const DateTime&)	4
-../Core/Src/app.cpp:504:6:void App::retransmitBackup()	12
-../Core/Src/app.cpp:442:6:void App::transmitBuffer()	5
-../Core/Src/app.cpp:317:19:void App::run()	14
+../Core/Src/app.cpp:478:6:void App::transmitSingle(float, const DateTime&)	4
+../Core/Src/app.cpp:508:6:void App::retransmitBackup()	12
+../Core/Src/app.cpp:446:6:void App::transmitBuffer()	5
+../Core/Src/app.cpp:317:19:void App::run()	15

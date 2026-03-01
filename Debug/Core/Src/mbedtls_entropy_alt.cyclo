@@ -1,2 +1,7 @@
-../Core/Src/mbedtls_entropy_alt.c:6:5:mbedtls_hardware_poll	1
-../Core/Src/mbedtls_entropy_alt.c:16:19:mbedtls_ms_time	1
+../Core/Src/mbedtls_entropy_alt.c:16:17:xorshift32	1
+../Core/Src/mbedtls_entropy_alt.c:24:17:mix32	1
+../Core/Src/mbedtls_entropy_alt.c:30:13:dwt_enable_cycle_counter	3
+../Core/Src/mbedtls_entropy_alt.c:42:17:read_cycle_counter_safe	1
+../Core/Src/mbedtls_entropy_alt.c:48:17:gather_noise_word	2
+../Core/Src/mbedtls_entropy_alt.c:79:5:mbedtls_hardware_poll	6
+../Core/Src/mbedtls_entropy_alt.c:115:19:mbedtls_ms_time	1

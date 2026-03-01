@@ -357,7 +357,11 @@ void App::init()
       (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
       (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
     );
-    if (lenLine > 0) m_sdBackup.appendLine(line);
+    if (lenLine > 0) {
+      if (!m_sdBackup.appendLine(line)) {
+        DBG.error("SD: appendLine failed");
+      }
+    }
 
     // ---- Тестовая отправка на сервер на BOOT/WAKE ----
     if (doSelfTest) {

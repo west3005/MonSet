@@ -67,13 +67,13 @@ namespace Config {
 constexpr uint8_t W5500_MAC[6] = {0x02,0x30,0x05,0x00,0x00,0x01};
 
 enum class NetMode : uint8_t { DHCP = 0, Static = 1 };
-constexpr NetMode NET_MODE = NetMode::DHCP;
+constexpr NetMode NET_MODE = NetMode::Static;
 
 // Static IPv4 (используются только если NET_MODE==Static)
 constexpr uint8_t NET_IP[4]  = {192,168,31,122};
 constexpr uint8_t NET_SN[4]  = {255,255,255,0};
 constexpr uint8_t NET_GW[4]  = {192,168,31,1};
-constexpr uint8_t NET_DNS[4] = {8,8,8,8};
+constexpr uint8_t NET_DNS[4] = {192,168,31,1};
 
 constexpr uint32_t W5500_DHCP_TIMEOUT_MS = 8000;
 

@@ -1,14 +1,15 @@
 #include "https_w5500.hpp"
-
 #include "debug_uart.hpp"
 
-#include <cstring>
 #include <cctype>
+#include <cstring>
+#include <cstdio>
 
 extern "C" {
 #include "socket.h"
 #include "dns.h"
-#include "w5500.h"  // getSn_RX_RSR/getSn_TX_FSR
+#include "w5500.h"        // getSn_RX_RSR/getSn_TX_FSR, getSn_SR, getSn_IR
+#include "wizchip_conf.h" // wizchip_getnetinfo, ctlwizchip
 
 #include "mbedtls/ssl.h"
 #include "mbedtls/ctr_drbg.h"
@@ -18,15 +19,35 @@ extern "C" {
 }
 
 static const char* s_caPem = nullptr;
-void HttpsW5500::setCaPem(const char* caPem) { s_caPem = caPem; }
 
-static bool isIpv4Literal(const char* s) {
+void HttpsW5500::setCaPem(const char* caPem)
+{
+  s_caPem = caPem;
+}
+
+static void dumpIp(const char* tag, const uint8_t ip[4])
+{
+  DBG.info("%s %u.%u.%u.%u", tag, ip[0], ip[1], ip[2], ip[3]);
+}
+
+static void dumpSockState(uint8_t sn, const char* tag)
+{
+  uint8_t sr = getSn_SR(sn);
+  uint8_t ir = getSn_IR(sn);
+  DBG.info("%s: Sn_SR=0x%02X Sn_IR=0x%02X", tag, sr, ir);
+}
+
+static bool isIpv4Literal(const char* s)
+{
   if (!s || !*s) return false;
-  for (const char* p = s; *p; ++p) if (!std::isdigit((unsigned char)*p) && *p != '.') return false;
+  for (const char* p = s; *p; ++p) {
+    if (!std::isdigit((unsigned char)*p) && *p != '.') return false;
+  }
   return true;
 }
 
-static bool resolveHost(const char* host, uint8_t outIp[4]) {
+static bool resolveHost(const char* host, uint8_t outIp[4])
+{
   if (isIpv4Literal(host)) {
     uint32_t a=0,b=0,c=0,d=0;
     if (std::sscanf(host, "%lu.%lu.%lu.%lu", &a,&b,&c,&d) != 4) return false;
@@ -42,42 +63,47 @@ static bool resolveHost(const char* host, uint8_t outIp[4]) {
   wiz_NetInfo ni{};
   wizchip_getnetinfo(&ni);
 
+  DBG.info("DNS: server %u.%u.%u.%u", ni.dns[0], ni.dns[1], ni.dns[2], ni.dns[3]);
+
   uint8_t ip[4]{};
   int8_t r = DNS_run(ni.dns, (uint8_t*)host, ip);
+
+  DBG.info("DNS: run host=%s r=%d", host, (int)r);
+
   if (r != 1) return false;
 
   std::memcpy(outIp, ip, 4);
+  dumpIp("DNS: resolved", outIp);
   return true;
 }
 
 // -------- mbedTLS BIO over W5500 socket --------
 struct TlsSockCtx {
-  uint8_t sn;
+  uint8_t  sn;
   uint32_t deadline;
 };
 
-static int w5500_send_cb(void* ctx, const unsigned char* buf, size_t len) {
+static int w5500_send_cb(void* ctx, const unsigned char* buf, size_t len)
+{
   auto* c = (TlsSockCtx*)ctx;
   if (len == 0) return 0;
 
-  // Если нет места в TX FIFO — "WANT_WRITE"
   uint16_t fsr = getSn_TX_FSR(c->sn);
   if (fsr == 0) return MBEDTLS_ERR_SSL_WANT_WRITE;
 
   uint16_t toSend = (len > fsr) ? fsr : (uint16_t)len;
-  int32_t r = send(c->sn, (uint8_t*) buf, toSend);
+  int32_t r = send(c->sn, (uint8_t*)buf, toSend);
 
-  if (r < 0)  return MBEDTLS_ERR_SSL_INTERNAL_ERROR;
+  if (r < 0) return MBEDTLS_ERR_SSL_INTERNAL_ERROR;
   if (r == 0) return MBEDTLS_ERR_SSL_WANT_WRITE;
-
-  return (int) r;
+  return (int)r;
 }
 
-static int w5500_recv_cb(void* ctx, unsigned char* buf, size_t len) {
+static int w5500_recv_cb(void* ctx, unsigned char* buf, size_t len)
+{
   auto* c = (TlsSockCtx*)ctx;
   if (len == 0) return 0;
 
-  // Если нет данных — "WANT_READ"
   uint16_t rsr = getSn_RX_RSR(c->sn);
   if (rsr == 0) {
     if (HAL_GetTick() > c->deadline) return MBEDTLS_ERR_SSL_TIMEOUT;
@@ -85,17 +111,17 @@ static int w5500_recv_cb(void* ctx, unsigned char* buf, size_t len) {
   }
 
   uint16_t toRead = (len > rsr) ? rsr : (uint16_t)len;
-  int32_t r = recv(c->sn, (uint8_t*) buf, toRead);
+  int32_t r = recv(c->sn, (uint8_t*)buf, toRead);
 
   if (r < 0) return MBEDTLS_ERR_SSL_INTERNAL_ERROR;
-
-  /* r == 0: трактуем как EOF (как обычный recv() при закрытии соединения) */
-  return (int) r;
+  return (int)r; // r==0 => EOF
 }
 
 // -------- URL parse --------
-bool HttpsW5500::parseHttpsUrl(const char* url, UrlParts& out) {
+bool HttpsW5500::parseHttpsUrl(const char* url, UrlParts& out)
+{
   if (!url) return false;
+
   std::memset(&out, 0, sizeof(out));
   out.port = 443;
 
@@ -114,7 +140,10 @@ bool HttpsW5500::parseHttpsUrl(const char* url, UrlParts& out) {
   if (*p == ':') {
     p++;
     uint32_t port = 0;
-    while (*p && std::isdigit((unsigned char)*p)) { port = port * 10u + (uint32_t)(*p - '0'); p++; }
+    while (*p && std::isdigit((unsigned char)*p)) {
+      port = port * 10u + (uint32_t)(*p - '0');
+      p++;
+    }
     if (port == 0 || port > 65535) return false;
     out.port = (uint16_t)port;
   }
@@ -128,22 +157,52 @@ bool HttpsW5500::parseHttpsUrl(const char* url, UrlParts& out) {
   return true;
 }
 
+static void logMbedtlsErr(const char* tag, int rc)
+{
+  char buf[128];
+  std::memset(buf, 0, sizeof(buf));
+  mbedtls_strerror(rc, buf, sizeof(buf));
+  DBG.error("%s rc=%d (%s)", tag, rc, buf[0] ? buf : "no-text");
+}
+
 int HttpsW5500::postJson(const char* httpsUrl,
                          const char* authBasicB64,
                          const char* json,
                          uint16_t jsonLen,
-                         uint32_t timeoutMs) {
+                         uint32_t timeoutMs)
+{
   UrlParts u{};
   if (!parseHttpsUrl(httpsUrl, u)) return -10;
 
   uint8_t ip[4]{};
-  if (!resolveHost(u.host, ip)) return -11;
+  if (!resolveHost(u.host, ip)) {
+    DBG.error("HTTPS: resolveHost FAIL (%s)", u.host);
+    return -11;
+  }
+
+  DBG.info("HTTPS: connect %s:%u", u.host, (unsigned)u.port);
+  dumpIp("HTTPS: ip", ip);
 
   const uint8_t sn = 0;
   const uint16_t localPort = 50001;
 
-  if (socket(sn, Sn_MR_TCP, localPort, 0) != sn) { close(sn); return -20; }
-  if (connect(sn, ip, u.port) != SOCK_OK) { close(sn); return -21; }
+  if (socket(sn, Sn_MR_TCP, localPort, 0) != sn) {
+    DBG.error("HTTPS: socket() failed");
+    close(sn);
+    return -20;
+  }
+
+  dumpSockState(sn, "HTTPS: after socket");
+
+  int8_t rcConn = connect(sn, ip, u.port);
+  if (rcConn != SOCK_OK) {
+    DBG.error("HTTPS: connect() fail rc=%d", (int)rcConn);
+    dumpSockState(sn, "HTTPS: connect fail");
+    close(sn);
+    return -21;
+  }
+
+  dumpSockState(sn, "HTTPS: connected");
 
   // ---- mbedTLS init ----
   mbedtls_ssl_context ssl;
@@ -157,8 +216,13 @@ int HttpsW5500::postJson(const char* httpsUrl,
   mbedtls_ctr_drbg_init(&ctr);
 
   const char* pers = "w5500_https";
-  if (mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy,
-                            (const unsigned char*)pers, std::strlen(pers)) != 0) {
+  int rc = mbedtls_ctr_drbg_seed(&ctr,
+                                mbedtls_entropy_func,
+                                &entropy,
+                                (const unsigned char*)pers,
+                                std::strlen(pers));
+  if (rc != 0) {
+    logMbedtlsErr("TLS: ctr_drbg_seed", rc);
     close(sn);
     return -30;
   }
@@ -167,20 +231,22 @@ int HttpsW5500::postJson(const char* httpsUrl,
   mbedtls_x509_crt_init(&cacert);
 
   if (s_caPem) {
-    // CA PEM (строка с \n)
-    int rc = mbedtls_x509_crt_parse(&cacert,
-                                    (const unsigned char*)s_caPem,
-                                    std::strlen(s_caPem) + 1);
+    rc = mbedtls_x509_crt_parse(&cacert,
+                               (const unsigned char*)s_caPem,
+                               std::strlen(s_caPem) + 1);
     if (rc < 0) {
+      logMbedtlsErr("TLS: x509_crt_parse", rc);
       close(sn);
       return -31;
     }
   }
 
-  if (mbedtls_ssl_config_defaults(&conf,
+  rc = mbedtls_ssl_config_defaults(&conf,
                                   MBEDTLS_SSL_IS_CLIENT,
                                   MBEDTLS_SSL_TRANSPORT_STREAM,
-                                  MBEDTLS_SSL_PRESET_DEFAULT) != 0) {
+                                  MBEDTLS_SSL_PRESET_DEFAULT);
+  if (rc != 0) {
+    logMbedtlsErr("TLS: config_defaults", rc);
     close(sn);
     return -32;
   }
@@ -191,13 +257,16 @@ int HttpsW5500::postJson(const char* httpsUrl,
     mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_REQUIRED);
     mbedtls_ssl_conf_ca_chain(&conf, &cacert, nullptr);
   } else {
-    // Работает “как HTTPS”, но без проверки сертификата сервера
     mbedtls_ssl_conf_authmode(&conf, MBEDTLS_SSL_VERIFY_NONE);
   }
 
-  if (mbedtls_ssl_setup(&ssl, &conf) != 0) { close(sn); return -33; }
+  rc = mbedtls_ssl_setup(&ssl, &conf);
+  if (rc != 0) {
+    logMbedtlsErr("TLS: ssl_setup", rc);
+    close(sn);
+    return -33;
+  }
 
-  // SNI/проверка hostname (даже при VERIFY_NONE полезно для SNI)
   (void)mbedtls_ssl_set_hostname(&ssl, u.host);
 
   TlsSockCtx bio{sn, HAL_GetTick() + timeoutMs};
@@ -205,19 +274,31 @@ int HttpsW5500::postJson(const char* httpsUrl,
 
   // ---- handshake loop ----
   while (true) {
-    int rc = mbedtls_ssl_handshake(&ssl);
+    rc = mbedtls_ssl_handshake(&ssl);
     if (rc == 0) break;
+
     if (rc == MBEDTLS_ERR_SSL_WANT_READ || rc == MBEDTLS_ERR_SSL_WANT_WRITE) {
-      if (HAL_GetTick() > bio.deadline) { rc = MBEDTLS_ERR_SSL_TIMEOUT; }
-      else { HAL_Delay(1); continue; }
+      if (HAL_GetTick() > bio.deadline) {
+        logMbedtlsErr("TLS: handshake timeout", MBEDTLS_ERR_SSL_TIMEOUT);
+        rc = MBEDTLS_ERR_SSL_TIMEOUT;
+        break;
+      }
+      HAL_Delay(1);
+      continue;
     }
-    // Ошибка handshake
+
+    logMbedtlsErr("TLS: handshake", rc);
+    break;
+  }
+
+  if (rc != 0) {
     mbedtls_ssl_free(&ssl);
     mbedtls_ssl_config_free(&conf);
     mbedtls_x509_crt_free(&cacert);
     mbedtls_ctr_drbg_free(&ctr);
     mbedtls_entropy_free(&entropy);
-    disconnect(sn); close(sn);
+    disconnect(sn);
+    close(sn);
     return -40;
   }
 
@@ -234,14 +315,22 @@ int HttpsW5500::postJson(const char* httpsUrl,
     "\r\n",
     u.path, u.host, authBasicB64 ? authBasicB64 : "", (unsigned)jsonLen
   );
-  if (hdrLen <= 0 || (size_t)hdrLen >= sizeof(hdr)) return -50;
+
+  if (hdrLen <= 0 || (size_t)hdrLen >= sizeof(hdr)) {
+    DBG.error("HTTPS: header snprintf fail");
+    return -50;
+  }
 
   auto sslWriteAll = [&](const uint8_t* p, uint32_t n) -> int {
     uint32_t off = 0;
     while (off < n) {
-      int rc = mbedtls_ssl_write(&ssl, p + off, (size_t)(n - off));
-      if (rc > 0) { off += (uint32_t)rc; continue; }
-      if (rc == MBEDTLS_ERR_SSL_WANT_READ || rc == MBEDTLS_ERR_SSL_WANT_WRITE) { HAL_Delay(1); continue; }
+      int w = mbedtls_ssl_write(&ssl, p + off, (size_t)(n - off));
+      if (w > 0) { off += (uint32_t)w; continue; }
+      if (w == MBEDTLS_ERR_SSL_WANT_READ || w == MBEDTLS_ERR_SSL_WANT_WRITE) {
+        HAL_Delay(1);
+        continue;
+      }
+      logMbedtlsErr("TLS: write", w);
       return -1;
     }
     return 0;
@@ -257,22 +346,31 @@ int HttpsW5500::postJson(const char* httpsUrl,
   uint32_t t0 = HAL_GetTick();
 
   while ((HAL_GetTick() - t0) < timeoutMs) {
-    int rc = mbedtls_ssl_read(&ssl, (unsigned char*)rx + used, sizeof(rx) - 1 - used);
-    if (rc > 0) {
-      used += rc;
+    int r = mbedtls_ssl_read(&ssl, (unsigned char*)rx + used, sizeof(rx) - 1 - used);
+    if (r > 0) {
+      used += r;
       rx[used] = 0;
 
       const char* p = std::strstr(rx, "HTTP/1.1 ");
       if (!p) p = std::strstr(rx, "HTTP/1.0 ");
       if (p) {
         int code = 0;
-        if (std::sscanf(p, "HTTP/%*s %d", &code) == 1) { httpCode = code; break; }
+        if (std::sscanf(p, "HTTP/%*s %d", &code) == 1) {
+          httpCode = code;
+          break;
+        }
       }
       continue;
     }
 
-    if (rc == 0) break; // close_notify
-    if (rc == MBEDTLS_ERR_SSL_WANT_READ || rc == MBEDTLS_ERR_SSL_WANT_WRITE) { HAL_Delay(2); continue; }
+    if (r == 0) break;
+
+    if (r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE) {
+      HAL_Delay(2);
+      continue;
+    }
+
+    logMbedtlsErr("TLS: read", r);
     break;
   }
 
