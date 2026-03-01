@@ -45,7 +45,7 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
  ../Middlewares/Third_Party/FatFs/src/ff.h ../FATFS/Target/sd_diskio.h \
  ../FATFS/Target/user_diskio.h ../Core/Inc/sensor_reader.hpp \
  ../Core/Inc/data_buffer.hpp ../Core/Inc/power_manager.hpp \
- ../Core/Inc/spi.h ../Core/Inc/w5500_net.hpp \
+ ../Core/Inc/w5500_net.hpp \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/wizchip_conf.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Internet/DHCP/dhcp.h \
@@ -111,7 +111,6 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
 ../Core/Inc/sensor_reader.hpp:
 ../Core/Inc/data_buffer.hpp:
 ../Core/Inc/power_manager.hpp:
-../Core/Inc/spi.h:
 ../Core/Inc/w5500_net.hpp:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/wizchip_conf.h:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h:

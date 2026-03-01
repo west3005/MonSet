@@ -1,7 +1,7 @@
 ../Core/Src/w5500_net.cpp:10:6:static void W5500Net::dhcpCbAssigned()	1
 ../Core/Src/w5500_net.cpp:11:6:static void W5500Net::dhcpCbConflict()	1
 ../Core/Src/w5500_net.cpp:13:6:void W5500Net::getNetInfo(wiz_NetInfo&) const	1
-../Core/Src/w5500_net.cpp:56:6:bool W5500Net::tryDhcp(uint32_t)	6
-../Core/Src/w5500_net.cpp:103:6:void W5500Net::applyStatic()	1
+../Core/Src/w5500_net.cpp:59:6:bool W5500Net::tryDhcp(uint32_t)	6
+../Core/Src/w5500_net.cpp:106:6:void W5500Net::applyStatic()	1
 ../Core/Src/w5500_net.cpp:15:6:bool W5500Net::init(SPI_HandleTypeDef*, uint32_t)	5
-../Core/Src/w5500_net.cpp:121:6:void W5500Net::tick()	4
+../Core/Src/w5500_net.cpp:124:6:void W5500Net::tick()	4

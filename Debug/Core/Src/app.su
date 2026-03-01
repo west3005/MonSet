@@ -1,17 +1,20 @@
-../Core/Src/app.cpp:57:13:bool isIpv4Literal(const char*)	0	static
-../Core/Src/app.cpp:39:20:LinkChannel readChannel()	8	static
-../Core/Src/app.cpp:28:13:bool ethLinkUp()	8	static
-../Core/Src/app.cpp:44:13:bool startsWith(const char*, const char*)	16	static
-../Core/Src/app.cpp:65:13:bool parseHttpUrl(const char*, UrlParts&)	16	static
-../Core/Src/app.cpp:104:13:bool resolveHost(const char*, uint8_t*)	80	static
-../Core/Src/app.cpp:127:12:int httpPostPlainW5500(const char*, const char*, const char*, uint16_t, uint32_t)	848	static
-../Core/Src/app.cpp:223:1:App::App()	24	static
-../Core/Src/app.cpp:235:12:SystemMode App::readMode()	8	static
-../Core/Src/app.cpp:241:6:void App::ledOn()	8	static
-../Core/Src/app.cpp:242:6:void App::ledOff()	8	static
-../Core/Src/app.cpp:243:6:void App::ledBlink(uint8_t, uint32_t)	24	static
-../Core/Src/app.cpp:248:6:void App::init()	16	static
-../Core/Src/app.cpp:361:6:void App::transmitSingle(float, const DateTime&)	312	static
-../Core/Src/app.cpp:392:6:void App::retransmitBackup()	48	static
-../Core/Src/app.cpp:321:6:void App::transmitBuffer()	16	static
-../Core/Src/app.cpp:274:19:void App::run()	336	static
+../Core/Src/app.cpp:43:20:const char* chStr(LinkChannel)	0	static
+../Core/Src/app.cpp:100:13:bool isIpv4Literal(const char*)	0	static
+../Core/Src/app.cpp:37:20:LinkChannel readChannel()	8	static
+../Core/Src/app.cpp:48:13:void logNetSelect(const char*)	24	static
+../Core/Src/app.cpp:67:13:bool ethLinkUpAfterInit()	16	static
+../Core/Src/app.cpp:75:13:bool ensureEthReadyAndLinkUp()	8	static
+../Core/Src/app.cpp:55:13:bool startsWith(const char*, const char*)	16	static
+../Core/Src/app.cpp:109:13:bool parseHttpUrl(const char*, UrlParts&)	16	static
+../Core/Src/app.cpp:148:13:bool resolveHost(const char*, uint8_t*)	80	static
+../Core/Src/app.cpp:172:12:int httpPostPlainW5500(const char*, const char*, const char*, uint16_t, uint32_t)	848	static
+../Core/Src/app.cpp:268:1:App::App()	24	static
+../Core/Src/app.cpp:279:12:SystemMode App::readMode()	8	static
+../Core/Src/app.cpp:285:6:void App::ledOn()	8	static
+../Core/Src/app.cpp:286:6:void App::ledOff()	8	static
+../Core/Src/app.cpp:288:6:void App::ledBlink(uint8_t, uint32_t)	24	static
+../Core/Src/app.cpp:293:6:void App::init()	16	static
+../Core/Src/app.cpp:474:6:void App::transmitSingle(float, const DateTime&)	312	static
+../Core/Src/app.cpp:504:6:void App::retransmitBackup()	48	static
+../Core/Src/app.cpp:442:6:void App::transmitBuffer()	16	static
+../Core/Src/app.cpp:317:19:void App::run()	592	static

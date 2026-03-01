@@ -1,5 +1,7 @@
-../FATFS/Target/user_diskio.c:79:9:USER_initialize	16	static
-../FATFS/Target/user_diskio.c:94:9:USER_status	16	static
-../FATFS/Target/user_diskio.c:112:9:USER_read	24	static
-../FATFS/Target/user_diskio.c:133:9:USER_write	24	static
-../FATFS/Target/user_diskio.c:155:9:USER_ioctl	24	static
+../FATFS/Target/user_diskio.c:24:13:diskio_log	144	static
+../FATFS/Target/user_diskio.c:62:16:sd_wait_ready	16	static
+../FATFS/Target/user_diskio.c:77:9:USER_initialize	24	static
+../FATFS/Target/user_diskio.c:95:9:USER_status	16	static
+../FATFS/Target/user_diskio.c:107:9:USER_read	40	static
+../FATFS/Target/user_diskio.c:165:9:USER_write	40	static
+../FATFS/Target/user_diskio.c:206:9:USER_ioctl	56	static

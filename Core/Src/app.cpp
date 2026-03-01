@@ -6,15 +6,21 @@
  */
 #include "app.hpp"
 
-#include "spi.h"           // hspi1
-#include "w5500_net.hpp"   // ваш класс W5500Net
-#include "https_w5500.hpp" // HttpsW5500::postJson(...)
+#include "w5500_net.hpp"
+#include "https_w5500.hpp"
 
 #include <cctype>
 #include <cstring>
 #include <cstdio>
 
 extern "C" {
+  // HAL handles (cube *.h удалены — объявляем напрямую)
+  extern I2C_HandleTypeDef  hi2c1;
+  extern UART_HandleTypeDef huart2;
+  extern UART_HandleTypeDef huart3;
+  extern SPI_HandleTypeDef  hspi1;
+  extern RTC_HandleTypeDef  hrtc;
+
 #include "socket.h"
 #include "dns.h"
 #include "w5500.h"
@@ -24,27 +30,64 @@ extern "C" {
 // -------------------- ETH object --------------------
 static W5500Net eth;
 
-// Локальная проверка линка PHY (вместо eth.linkUp())
-static bool ethLinkUp()
-{
-  return (wizphy_getphylink() == PHY_LINK_ON);
-}
-
 // -------------------- Канал связи --------------------
 enum class LinkChannel : uint8_t { Gsm = 0, Eth = 1 };
 
-// NET_SELECT: подтяжка вверх
-// PB0=1 (разомкнут) -> GSM
-// PB0=0 (замкнут на GND) -> ETH
-static LinkChannel readChannel() {
+// PB0=1 -> GSM, PB0=0 -> ETH
+static LinkChannel readChannel()
+{
   GPIO_PinState pin = HAL_GPIO_ReadPin(PIN_NET_SW_PORT, PIN_NET_SW_PIN);
   return (pin == GPIO_PIN_RESET) ? LinkChannel::Eth : LinkChannel::Gsm;
 }
 
-static bool startsWith(const char* s, const char* prefix) {
+static const char* chStr(LinkChannel ch)
+{
+  return (ch == LinkChannel::Eth) ? "ETH(W5500)" : "GSM(SIM800L)";
+}
+
+static void logNetSelect(const char* tag)
+{
+  GPIO_PinState pin = HAL_GPIO_ReadPin(PIN_NET_SW_PORT, PIN_NET_SW_PIN);
+  LinkChannel ch = readChannel();
+  DBG.info("[%s] NET_SELECT PB0=%d => %s", tag, (int)pin, chStr(ch));
+}
+
+static bool startsWith(const char* s, const char* prefix)
+{
   if (!s || !prefix) return false;
   size_t n = std::strlen(prefix);
   return (std::strncmp(s, prefix, n) == 0);
+}
+
+// ============================================================================
+// ETH: правильный порядок init -> link
+// ============================================================================
+
+// PHY link читаем через ctlwizchip, но только ПОСЛЕ eth.init()
+static bool ethLinkUpAfterInit()
+{
+  uint8_t link = 0;
+  ctlwizchip(CW_GET_PHYLINK, (void*)&link);
+  return (link != 0);
+}
+
+// Гарантирует init W5500 и затем проверяет PHY link
+static bool ensureEthReadyAndLinkUp()
+{
+  if (!eth.ready()) {
+    DBG.info("ETH: init...");
+    if (!eth.init(&hspi1, Config::W5500_DHCP_TIMEOUT_MS)) {
+      DBG.error("ETH: init failed");
+      return false;
+    }
+  }
+
+  if (!ethLinkUpAfterInit()) {
+    DBG.error("ETH: link DOWN");
+    return false;
+  }
+
+  return true;
 }
 
 // -------------------- HTTP (plain) over W5500 --------------------
@@ -54,7 +97,8 @@ struct UrlParts {
   uint16_t port = 80;
 };
 
-static bool isIpv4Literal(const char* s) {
+static bool isIpv4Literal(const char* s)
+{
   if (!s || !*s) return false;
   for (const char* p = s; *p; ++p) {
     if (!std::isdigit((unsigned char)*p) && *p != '.') return false;
@@ -62,10 +106,10 @@ static bool isIpv4Literal(const char* s) {
   return true;
 }
 
-static bool parseHttpUrl(const char* url, UrlParts& out) {
+static bool parseHttpUrl(const char* url, UrlParts& out)
+{
   if (!url) return false;
 
-  // Было: memset(&out,0,sizeof(out)) -> предупреждение для не-trivial типа
   out = UrlParts{};
   out.port = 80;
 
@@ -101,7 +145,8 @@ static bool parseHttpUrl(const char* url, UrlParts& out) {
   return true;
 }
 
-static bool resolveHost(const char* host, uint8_t outIp[4]) {
+static bool resolveHost(const char* host, uint8_t outIp[4])
+{
   if (isIpv4Literal(host)) {
     uint32_t a=0,b=0,c=0,d=0;
     if (std::sscanf(host, "%lu.%lu.%lu.%lu", &a,&b,&c,&d) != 4) return false;
@@ -125,17 +170,18 @@ static bool resolveHost(const char* host, uint8_t outIp[4]) {
 }
 
 static int httpPostPlainW5500(const char* url,
-                              const char* authBasicB64,
-                              const char* json,
-                              uint16_t len,
-                              uint32_t timeoutMs) {
+                             const char* authBasicB64,
+                             const char* json,
+                             uint16_t len,
+                             uint32_t timeoutMs)
+{
   UrlParts u{};
   if (!parseHttpUrl(url, u)) return -10;
 
   uint8_t dstIp[4]{};
   if (!resolveHost(u.host, dstIp)) return -11;
 
-  const uint8_t sn = 0;
+  const uint8_t  sn = 0;
   const uint16_t localPort = 50000;
 
   int8_t s = socket(sn, Sn_MR_TCP, localPort, 0);
@@ -185,7 +231,7 @@ static int httpPostPlainW5500(const char* url,
   };
 
   if (sendAll((const uint8_t*)hdr, (uint32_t)hdrLen) != 0) { close(sn); return -23; }
-  if (sendAll((const uint8_t*)json, (uint32_t)len) != 0) { close(sn); return -24; }
+  if (sendAll((const uint8_t*)json, (uint32_t)len) != 0)    { close(sn); return -24; }
 
   uint32_t t0 = HAL_GetTick();
   static char rx[768];
@@ -219,76 +265,90 @@ static int httpPostPlainW5500(const char* url,
 
 // =================================================================
 
-/* ========= Конструктор ========= */
 App::App()
-  : m_rtc(&hi2c1),
-    m_modbus(&huart3, PIN_RS485_DE_PORT, PIN_RS485_DE_PIN),
-    m_gsm(&huart2, PIN_SIM_PWR_PORT, PIN_SIM_PWR_PIN),
-    m_sdBackup(),
-    m_sensor(m_modbus, m_rtc),
-    m_buffer(),
-    m_power(&hrtc, m_sdBackup)
+: m_rtc(&hi2c1),
+  m_modbus(&huart3, PIN_RS485_DE_PORT, PIN_RS485_DE_PIN),
+  m_gsm(&huart2, PIN_SIM_PWR_PORT, PIN_SIM_PWR_PIN),
+  m_sdBackup(),
+  m_sensor(m_modbus, m_rtc),
+  m_buffer(),
+  m_power(&hrtc, m_sdBackup)
 {
 }
 
-/* ========= Чтение режима ========= */
-SystemMode App::readMode() {
+SystemMode App::readMode()
+{
   auto pin = HAL_GPIO_ReadPin(PIN_MODE_SW_PORT, PIN_MODE_SW_PIN);
   return (pin == GPIO_PIN_SET) ? SystemMode::Debug : SystemMode::Sleep;
 }
 
-/* ========= LED ========= */
 void App::ledOn()  { HAL_GPIO_WritePin(PIN_LED_PORT, PIN_LED_PIN, GPIO_PIN_SET); }
 void App::ledOff() { HAL_GPIO_WritePin(PIN_LED_PORT, PIN_LED_PIN, GPIO_PIN_RESET); }
-void App::ledBlink(uint8_t count, uint32_t ms) {
+
+void App::ledBlink(uint8_t count, uint32_t ms)
+{
   for (uint8_t i = 0; i < count; i++) { ledOn(); HAL_Delay(ms); ledOff(); HAL_Delay(ms); }
 }
 
-/* ========= Инициализация ========= */
-void App::init() {
+void App::init()
+{
+  DBG.info("APP INIT MARK: %s %s", __DATE__, __TIME__);
+
   m_rtc.init();
   m_modbus.init();
   m_sdBackup.init();
   m_gsm.powerOff();
 
-  // Поднимем Ethernet заранее (DHCP->static fallback внутри W5500Net)
-  (void)eth.init(&hspi1, Config::W5500_DHCP_TIMEOUT_MS);
-
   m_mode = readMode();
   DBG.info("Mode: %s", (m_mode == SystemMode::Debug) ? "DEBUG" : "SLEEP");
-  DBG.info("Link: %s", (readChannel() == LinkChannel::Eth) ? "ETH(W5500)" : "GSM(SIM800L)");
+  logNetSelect("INIT");
 
   if (m_mode == SystemMode::Debug) {
     DBG.info(">>> РЕЖИМ: DEBUG <<<");
-    DBG.info("Опрос %d сек, отправка часто", static_cast<int>(Config::POLL_INTERVAL_SEC));
+    DBG.info("Опрос %d сек", (int)Config::POLL_INTERVAL_SEC);
     ledOn();
   } else {
     DBG.info(">>> РЕЖИМ: SLEEP <<<");
-    DBG.info("Опрос %d сек, отправка по пробуждению выбранным каналом",
-             static_cast<int>(Config::POLL_INTERVAL_SEC));
+    DBG.info("Опрос %d сек", (int)Config::POLL_INTERVAL_SEC);
     ledBlink(3, 200);
   }
 }
 
-/* ========= Главный цикл ========= */
-[[noreturn]] void App::run() {
+[[noreturn]] void App::run()
+{
+  bool wokeFromStop = false;
+  bool firstCycle = true;
+
   while (true) {
-    eth.tick(); // DHCP lease / DNS tick (если вы добавили DNS_time_handler внутрь W5500Net::tick)
+    if (eth.ready()) {
+      eth.tick();
+    }
 
     m_mode = readMode();
 
-    DateTime ts;
+    const bool doSelfTest = firstCycle || wokeFromStop;
+    const char* tag = firstCycle ? "BOOT" : "WAKE";
+
+    if (doSelfTest) {
+      DBG.info("========================================================================");
+      DBG.info("[%s] Self-test: NET_SELECT + Modbus + Server POST", tag);
+      logNetSelect(tag);
+      DBG.info("========================================================================");
+    }
+
+    // ---- Modbus опрос ----
+    DateTime ts{};
     float val = m_sensor.read(ts);
 
-    char timeStr[32];
+    char timeStr[32]{};
     ts.formatISO8601(timeStr);
     DBG.data("val=%.3f t=%s", val, timeStr);
 
     ledBlink(1, 50);
 
-    // JSONL: одна строка = один JSON-объект
+    // ---- SD журнал ----
     char line[256];
-    int len = std::snprintf(
+    int lenLine = std::snprintf(
       line, sizeof(line),
       "{\"metricId\":\"%s\",\"value\":%.3f,"
       "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}",
@@ -297,44 +357,98 @@ void App::init() {
       (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
       (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
     );
-    if (len > 0) m_sdBackup.appendLine(line);
+    if (lenLine > 0) m_sdBackup.appendLine(line);
 
-    // Отправка:
-    // - DEBUG: пытаться каждый цикл
-    // - SLEEP: отправлять сразу после пробуждения
+    // ---- Тестовая отправка на сервер на BOOT/WAKE ----
+    if (doSelfTest) {
+      LinkChannel ch = readChannel();
+
+      char j[256];
+      int len = std::snprintf(
+        j, sizeof(j),
+        "[{\"metricId\":\"%s\",\"value\":%.3f,"
+        "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}]",
+        Config::METRIC_ID,
+        val,
+        (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
+        (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
+      );
+
+      if (len > 0 && len < (int)sizeof(j)) {
+        int http = -1;
+
+        if (ch == LinkChannel::Eth) {
+          if (!ensureEthReadyAndLinkUp()) {
+            DBG.error("[%s] ETH not ready/link -> POST skipped", tag);
+          } else {
+            if (startsWith(Config::SERVER_URL, "https://")) {
+              http = HttpsW5500::postJson(
+                Config::SERVER_URL,
+                Config::SERVER_AUTH,
+                j,
+                (uint16_t)std::strlen(j),
+                20000
+              );
+              DBG.info("[%s] ETH HTTPS POST code=%d", tag, http);
+            } else if (startsWith(Config::SERVER_URL, "http://")) {
+              http = httpPostPlainW5500(
+                Config::SERVER_URL,
+                Config::SERVER_AUTH,
+                j,
+                (uint16_t)std::strlen(j),
+                15000
+              );
+              DBG.info("[%s] ETH HTTP POST code=%d", tag, http);
+            } else {
+              DBG.error("[%s] Unsupported SERVER_URL scheme", tag);
+            }
+          }
+        } else {
+          m_gsm.powerOn();
+          if (m_gsm.init() == GsmStatus::Ok) {
+            http = m_gsm.httpPost(Config::SERVER_URL, j, (uint16_t)std::strlen(j));
+            DBG.info("[%s] GSM POST code=%d", tag, http);
+            m_gsm.disconnect();
+          } else {
+            DBG.error("[%s] GSM init fail -> POST skipped", tag);
+          }
+          m_gsm.powerOff();
+        }
+      } else {
+        DBG.error("[%s] Test JSON build failed", tag);
+      }
+    }
+
+    // ---- Обычная отправка журнала ----
     transmitBuffer();
 
-    // Сон/ожидание
+    // ---- Сон/ожидание ----
     if (m_mode == SystemMode::Sleep) {
       DBG.info("Stop Mode %d сек...", (int)Config::POLL_INTERVAL_SEC);
       ledOff();
       m_power.enterStopMode(Config::POLL_INTERVAL_SEC);
       DBG.info("...проснулись!");
+      wokeFromStop = true;
     } else {
       DBG.info("Ожидание %d сек", (int)Config::POLL_INTERVAL_SEC);
       HAL_Delay(Config::POLL_INTERVAL_SEC * 1000UL);
+      wokeFromStop = false;
     }
+
+    firstCycle = false;
   }
 }
 
-/* ========= Передача буфера ========= */
-void App::transmitBuffer() {
+void App::transmitBuffer()
+{
   LinkChannel ch = readChannel();
   DBG.info("======== ОТПРАВКА ЖУРНАЛА (%s) ========",
            (ch == LinkChannel::Eth) ? "ETH" : "GSM");
 
   if (ch == LinkChannel::Eth) {
-    // ETH строго: никаких попыток GSM, даже если Ethernet не поднят
-    if (!ethLinkUp()) {
-      DBG.error("ETH selected, link DOWN -> skip (no GSM fallback)");
+    if (!ensureEthReadyAndLinkUp()) {
+      DBG.error("ETH selected -> skip (no GSM fallback)");
       return;
-    }
-    if (!eth.ready()) {
-      (void)eth.init(&hspi1, Config::W5500_DHCP_TIMEOUT_MS);
-      if (!eth.ready()) {
-        DBG.error("ETH selected, init failed -> skip (no GSM fallback)");
-        return;
-      }
     }
 
     retransmitBackup();
@@ -357,9 +471,8 @@ void App::transmitBuffer() {
   DBG.info("======== ОТПРАВКА ЖУРНАЛА КОНЕЦ ========");
 }
 
-/* ========= Одно измерение (DEBUG) ========= */
-void App::transmitSingle(float value, const DateTime& dt) {
-
+void App::transmitSingle(float value, const DateTime& dt)
+{
   if (readChannel() == LinkChannel::Eth) {
     DBG.error("ETH selected -> transmitSingle via GSM запрещён, пропуск");
     return;
@@ -379,8 +492,8 @@ void App::transmitSingle(float value, const DateTime& dt) {
 
   m_gsm.powerOn();
   if (m_gsm.init() == GsmStatus::Ok) {
-    auto s = m_gsm.httpPost(Config::SERVER_URL, j, static_cast<uint16_t>(len));
-    DBG.info("DEBUG HTTP: %d", s);
+    auto s = m_gsm.httpPost(Config::SERVER_URL, j, (uint16_t)len);
+    DBG.info("DEBUG HTTP: %d", (int)s);
     m_gsm.disconnect();
   } else {
     DBG.error("GSM init fail (DEBUG)");
@@ -388,8 +501,8 @@ void App::transmitSingle(float value, const DateTime& dt) {
   m_gsm.powerOff();
 }
 
-/* ========= Повторная отправка бэкапа ========= */
-void App::retransmitBackup() {
+void App::retransmitBackup()
+{
   LinkChannel ch = readChannel();
 
   while (m_sdBackup.exists()) {
@@ -414,32 +527,34 @@ void App::retransmitBackup() {
     int http = -1;
 
     if (ch == LinkChannel::Eth) {
-      // ETH строго: только Ethernet
-      if (!ethLinkUp() || !eth.ready()) {
-        DBG.error("ETH selected but not ready -> stop resend, keep journal");
+      if (!ensureEthReadyAndLinkUp()) {
+        DBG.error("ETH selected but not ready/link -> stop resend, keep journal");
         return;
       }
 
       if (startsWith(Config::SERVER_URL, "https://")) {
-        http = HttpsW5500::postJson(Config::SERVER_URL,
-                                    Config::SERVER_AUTH,
-                                    m_json,
-                                    (uint16_t)std::strlen(m_json),
-                                    20000);
+        http = HttpsW5500::postJson(
+          Config::SERVER_URL,
+          Config::SERVER_AUTH,
+          m_json,
+          (uint16_t)std::strlen(m_json),
+          20000
+        );
         DBG.info("ETH HTTPS: %d", http);
       } else if (startsWith(Config::SERVER_URL, "http://")) {
-        http = httpPostPlainW5500(Config::SERVER_URL,
-                                  Config::SERVER_AUTH,
-                                  m_json,
-                                  (uint16_t)std::strlen(m_json),
-                                  15000);
+        http = httpPostPlainW5500(
+          Config::SERVER_URL,
+          Config::SERVER_AUTH,
+          m_json,
+          (uint16_t)std::strlen(m_json),
+          15000
+        );
         DBG.info("ETH HTTP: %d", http);
       } else {
         DBG.error("Unsupported URL scheme in SERVER_URL");
         return;
       }
     } else {
-      // GSM
       http = m_gsm.httpPost(Config::SERVER_URL, m_json, (uint16_t)std::strlen(m_json));
       DBG.info("GSM HTTP: %d", http);
     }

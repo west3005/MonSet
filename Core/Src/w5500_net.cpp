@@ -13,7 +13,10 @@ void W5500Net::dhcpCbConflict() { s_dhcpConflict = true; }
 void W5500Net::getNetInfo(wiz_NetInfo& out) const { out = m_info; }
 
 bool W5500Net::init(SPI_HandleTypeDef* hspi, uint32_t dhcpTimeoutMs) {
-  m_ready = false;
+	uint8_t ver = getVERSIONR();
+	DBG.info("W5500: VERSIONR=0x%02X", ver);
+
+	m_ready = false;
   m_mode = Mode::Static;
   s_dhcpAssigned = false;
   s_dhcpConflict = false;
