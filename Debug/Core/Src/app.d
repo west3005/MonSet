@@ -35,9 +35,10 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/debug_uart.hpp ../Core/Inc/main.h ../Core/Inc/ds3231.hpp \
- ../Core/Inc/modbus_rtu.hpp ../Core/Inc/sim800l.hpp \
- ../Core/Inc/sd_backup.hpp ../Middlewares/Third_Party/FatFs/src/ff.h \
+ ../Core/Inc/runtime_config.hpp ../Core/Inc/debug_uart.hpp \
+ ../Core/Inc/main.h ../Core/Inc/ds3231.hpp ../Core/Inc/modbus_rtu.hpp \
+ ../Core/Inc/sim800l.hpp ../Core/Inc/sd_backup.hpp \
+ ../Middlewares/Third_Party/FatFs/src/ff.h \
  ../Middlewares/Third_Party/FatFs/src/integer.h ../FATFS/Target/ffconf.h \
  ../Core/Inc/main.h ../FATFS/Target/bsp_driver_sd.h ../FATFS/App/fatfs.h \
  ../Middlewares/Third_Party/FatFs/src/ff_gen_drv.h \
@@ -91,6 +92,7 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
+../Core/Inc/runtime_config.hpp:
 ../Core/Inc/debug_uart.hpp:
 ../Core/Inc/main.h:
 ../Core/Inc/ds3231.hpp:

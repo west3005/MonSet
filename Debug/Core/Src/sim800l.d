@@ -34,7 +34,8 @@ Core/Src/sim800l.o: ../Core/Src/sim800l.cpp ../Core/Inc/sim800l.hpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/config.hpp ../Core/Inc/debug_uart.hpp
+ ../Core/Inc/config.hpp ../Core/Inc/runtime_config.hpp \
+ ../Core/Inc/debug_uart.hpp
 ../Core/Inc/sim800l.hpp:
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -73,4 +74,5 @@ Core/Src/sim800l.o: ../Core/Src/sim800l.cpp ../Core/Inc/sim800l.hpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/config.hpp:
+../Core/Inc/runtime_config.hpp:
 ../Core/Inc/debug_uart.hpp:

@@ -1,24 +1,33 @@
-../Core/Src/app.cpp:44:20:const char* chStr(LinkChannel)	0	static
-../Core/Src/app.cpp:101:13:bool isIpv4Literal(const char*)	0	static
-../Core/Src/app.cpp:269:13:bool isLeap(int)	0	static
-../Core/Src/app.cpp:271:17:uint32_t daysBeforeMonth(int, int)	8	static
-../Core/Src/app.cpp:279:17:uint64_t toUnixMs(const DateTime&)	32	static
-../Core/Src/app.cpp:299:13:void u64_to_dec(char*, size_t, uint64_t)	56	static
-../Core/Src/app.cpp:38:20:LinkChannel readChannel()	8	static
-../Core/Src/app.cpp:49:13:void logNetSelect(const char*)	24	static
-../Core/Src/app.cpp:68:13:bool ethLinkUpAfterInit()	16	static
-../Core/Src/app.cpp:76:13:bool ensureEthReadyAndLinkUp()	8	static
-../Core/Src/app.cpp:56:13:bool startsWith(const char*, const char*)	16	static
-../Core/Src/app.cpp:110:13:bool parseHttpUrl(const char*, UrlParts&)	16	static
-../Core/Src/app.cpp:149:13:bool resolveHost(const char*, uint8_t*)	80	static
-../Core/Src/app.cpp:173:12:int httpPostPlainW5500(const char*, const char*, const char*, uint16_t, uint32_t)	848	static
-../Core/Src/app.cpp:317:1:App::App()	24	static
-../Core/Src/app.cpp:328:12:SystemMode App::readMode()	8	static
-../Core/Src/app.cpp:334:6:void App::ledOn()	8	static
-../Core/Src/app.cpp:335:6:void App::ledOff()	8	static
-../Core/Src/app.cpp:337:6:void App::ledBlink(uint8_t, uint32_t)	24	static
-../Core/Src/app.cpp:342:6:void App::init()	16	static
-../Core/Src/app.cpp:543:6:void App::transmitSingle(float, const DateTime&)	344	static
-../Core/Src/app.cpp:578:6:void App::retransmitBackup()	40	static
-../Core/Src/app.cpp:511:6:void App::transmitBuffer()	16	static
-../Core/Src/app.cpp:371:19:void App::run()	624	static
+../Core/Src/app.cpp:40:20:const char* chStr(LinkChannel)	0	static
+../Core/Src/app.cpp:96:13:bool isIpv4Literal(const char*)	0	static
+../Core/Src/app.cpp:265:13:bool isLeap(int)	0	static
+../Core/Src/app.cpp:267:17:uint32_t daysBeforeMonth(int, int)	8	static
+../Core/Src/app.cpp:275:17:uint64_t toUnixMs(const DateTime&)	32	static
+../Core/Src/app.cpp:294:13:void u64_to_dec(char*, size_t, uint64_t)	56	static
+../Core/Src/app.cpp:336:13:bool rtcLooksInvalid(const DateTime&)	0	static
+../Core/Src/app.cpp:345:13:bool isLeapYearFull(int)	0	static
+../Core/Src/app.cpp:350:13:void unixToDateTime(uint32_t, DateTime&)	16	static
+../Core/Src/app.cpp:34:20:LinkChannel readChannel()	8	static
+../Core/Src/app.cpp:45:13:void logNetSelect(const char*)	24	static
+../Core/Src/app.cpp:321:17:uint32_t bkpRead(uint32_t)	8	static
+../Core/Src/app.cpp:324:17:uint32_t loadLastSyncUnix()	8	static
+../Core/Src/app.cpp:62:13:bool ethLinkUpAfterInit()	16	static
+../Core/Src/app.cpp:69:13:bool ensureEthReadyAndLinkUp()	8	static
+../Core/Src/app.cpp:144:13:bool resolveHost(const char*, uint8_t*)	80	static
+../Core/Src/app.cpp:382:13:bool sntpGetUnixTime(const char*, uint32_t&)	144	static
+../Core/Src/app.cpp:322:17:void bkpWrite(uint32_t, uint32_t)	8	static
+../Core/Src/app.cpp:330:13:void storeLastSyncUnix(uint32_t)	8	static
+../Core/Src/app.cpp:52:13:bool startsWith(const char*, const char*)	16	static
+../Core/Src/app.cpp:105:13:bool parseHttpUrl(const char*, UrlParts&)	16	static
+../Core/Src/app.cpp:168:12:int httpPostPlainW5500(const char*, const char*, const char*, uint16_t, uint32_t)	848	static
+../Core/Src/app.cpp:444:1:App::App()	24	static
+../Core/Src/app.cpp:455:12:SystemMode App::readMode()	8	static
+../Core/Src/app.cpp:461:6:void App::ledOn()	8	static
+../Core/Src/app.cpp:462:6:void App::ledOff()	8	static
+../Core/Src/app.cpp:464:6:void App::ledBlink(uint8_t, uint32_t)	24	static
+../Core/Src/app.cpp:469:6:void App::init()	16	static
+../Core/Src/app.cpp:503:6:bool App::syncRtcWithNtpIfNeeded(const char*, bool)	144	static
+../Core/Src/app.cpp:750:6:void App::transmitSingle(float, const DateTime&)	408	static
+../Core/Src/app.cpp:785:6:void App::retransmitBackup()	48	static
+../Core/Src/app.cpp:719:6:void App::transmitBuffer()	16	static
+../Core/Src/app.cpp:574:19:void App::run()	752	static

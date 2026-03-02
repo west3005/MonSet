@@ -35,7 +35,8 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
  ../Core/Inc/config.hpp ../Core/Inc/debug_uart.hpp ../Core/Inc/main.h \
- ../Core/Inc/app.hpp ../Core/Inc/config.hpp ../Core/Inc/debug_uart.hpp \
+ ../Core/Inc/app.hpp ../Core/Inc/config.hpp \
+ ../Core/Inc/runtime_config.hpp ../Core/Inc/debug_uart.hpp \
  ../Core/Inc/ds3231.hpp ../Core/Inc/modbus_rtu.hpp \
  ../Core/Inc/sim800l.hpp ../Core/Inc/sd_backup.hpp \
  ../Middlewares/Third_Party/FatFs/src/ff.h \
@@ -88,6 +89,7 @@ Core/Src/main.o: ../Core/Src/main.cpp ../Core/Inc/main.h \
 ../Core/Inc/main.h:
 ../Core/Inc/app.hpp:
 ../Core/Inc/config.hpp:
+../Core/Inc/runtime_config.hpp:
 ../Core/Inc/debug_uart.hpp:
 ../Core/Inc/ds3231.hpp:
 ../Core/Inc/modbus_rtu.hpp:

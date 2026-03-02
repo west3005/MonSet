@@ -1,4 +1,5 @@
 #pragma once
+
 #include "stm32f4xx_hal.h"
 #include <cstdint>
 
@@ -12,9 +13,11 @@ public:
   enum class Mode : uint8_t { Static = 0, Dhcp = 1 };
 
   bool init(SPI_HandleTypeDef* hspi, uint32_t dhcpTimeoutMs);
-  void tick();                 // вызывать в цикле, если DHCP активен
+  void tick();
+
   bool ready() const { return m_ready; }
   Mode mode() const { return m_mode; }
+
   void getNetInfo(wiz_NetInfo& out) const;
 
 private:
@@ -28,7 +31,7 @@ private:
   Mode m_mode = Mode::Static;
 
   uint32_t m_lastDhcp1s = 0;
+  uint8_t m_dhcpBuf[548]{};
 
-  uint8_t m_dhcpBuf[548]{};   // стандартно хватает
   wiz_NetInfo m_info{};
 };

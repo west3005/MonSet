@@ -5,9 +5,9 @@
  * ================================================================
  */
 #include "app.hpp"
-
 #include "w5500_net.hpp"
 #include "https_w5500.hpp"
+#include "runtime_config.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -15,7 +15,6 @@
 #include <cstdint>
 
 extern "C" {
-  // HAL handles
   extern I2C_HandleTypeDef  hi2c1;
   extern UART_HandleTypeDef huart2;
   extern UART_HandleTypeDef huart3;
@@ -28,13 +27,10 @@ extern "C" {
 #include "wizchip_conf.h"
 }
 
-// -------------------- ETH object --------------------
 static W5500Net eth;
 
-// -------------------- Канал связи --------------------
 enum class LinkChannel : uint8_t { Gsm = 0, Eth = 1 };
 
-// PB0=1 -> GSM, PB0=0 -> ETH
 static LinkChannel readChannel()
 {
   GPIO_PinState pin = HAL_GPIO_ReadPin(PIN_NET_SW_PORT, PIN_NET_SW_PIN);
@@ -61,10 +57,8 @@ static bool startsWith(const char* s, const char* prefix)
 }
 
 // ============================================================================
-// ETH: правильный порядок init -> link
+// ETH
 // ============================================================================
-
-// PHY link читаем через ctlwizchip, но только ПОСЛЕ eth.init()
 static bool ethLinkUpAfterInit()
 {
   uint8_t link = 0;
@@ -72,7 +66,6 @@ static bool ethLinkUpAfterInit()
   return (link != 0);
 }
 
-// Гарантирует init W5500 и затем проверяет PHY link
 static bool ensureEthReadyAndLinkUp()
 {
   if (!eth.ready()) {
@@ -91,7 +84,9 @@ static bool ensureEthReadyAndLinkUp()
   return true;
 }
 
-// -------------------- HTTP (plain) over W5500 --------------------
+// ============================================================================
+// HTTP plain W5500
+// ============================================================================
 struct UrlParts {
   char host[64]{};
   char path[128]{};
@@ -266,6 +261,7 @@ static int httpPostPlainW5500(const char* url,
 
 // ============================================================================
 // Time helpers: DateTime -> unix ms (UTC, по полям DateTime)
+// ============================================================================
 static bool isLeap(int y) { return ((y % 4) == 0 && (y % 100) != 0) || ((y % 400) == 0); }
 
 static uint32_t daysBeforeMonth(int y, int m)
@@ -295,7 +291,6 @@ static uint64_t toUnixMs(const DateTime& dt)
   return sec * 1000ULL;
 }
 
-// uint64_t -> dec string (чтобы не зависеть от %llu в printf)
 static void u64_to_dec(char* out, size_t outSz, uint64_t v)
 {
   if (!out || outSz == 0) return;
@@ -312,6 +307,138 @@ static void u64_to_dec(char* out, size_t outSz, uint64_t v)
   while (n && (pos + 1) < outSz) out[pos++] = tmp[--n];
   out[pos] = '\0';
 }
+
+// ============================================================================
+// NTP sync (host/period from RuntimeConfig)
+// ============================================================================
+static constexpr uint16_t NTP_PORT = 123;
+static constexpr uint32_t NTP_TIMEOUT_MS = 3000;
+
+static constexpr uint32_t BKP_MAGIC = 0x4E545031; // "NTP1"
+static constexpr uint32_t BKP_MAGIC_REG = RTC_BKP_DR0;
+static constexpr uint32_t BKP_LASTSYNC_REG = RTC_BKP_DR1;
+
+static uint32_t bkpRead(uint32_t reg)  { return HAL_RTCEx_BKUPRead(&hrtc, reg); }
+static void     bkpWrite(uint32_t reg, uint32_t v) { HAL_RTCEx_BKUPWrite(&hrtc, reg, v); }
+
+static uint32_t loadLastSyncUnix()
+{
+  if (bkpRead(BKP_MAGIC_REG) != BKP_MAGIC) return 0;
+  return bkpRead(BKP_LASTSYNC_REG);
+}
+
+static void storeLastSyncUnix(uint32_t unixSec)
+{
+  bkpWrite(BKP_MAGIC_REG, BKP_MAGIC);
+  bkpWrite(BKP_LASTSYNC_REG, unixSec);
+}
+
+static bool rtcLooksInvalid(const DateTime& dt)
+{
+  if (dt.year < 24 || dt.year > 60) return true;
+  if (dt.month < 1 || dt.month > 12) return true;
+  if (dt.date < 1 || dt.date > 31) return true;
+  if (dt.hours > 23 || dt.minutes > 59 || dt.seconds > 59) return true;
+  return false;
+}
+
+static bool isLeapYearFull(int y)
+{
+  return ((y % 4) == 0 && (y % 100) != 0) || ((y % 400) == 0);
+}
+
+static void unixToDateTime(uint32_t unixSec, DateTime& out)
+{
+  uint32_t sec = unixSec;
+
+  out.seconds = (uint8_t)(sec % 60); sec /= 60;
+  out.minutes = (uint8_t)(sec % 60); sec /= 60;
+  out.hours   = (uint8_t)(sec % 24); sec /= 24;
+
+  uint32_t days = sec;
+  int y = 1970;
+  while (true) {
+    uint32_t diy = isLeapYearFull(y) ? 366u : 365u;
+    if (days < diy) break;
+    days -= diy;
+    y++;
+  }
+
+  static const uint8_t mdays_norm[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+  uint8_t m = 0;
+  while (m < 12) {
+    uint8_t md = mdays_norm[m];
+    if (m == 1 && isLeapYearFull(y)) md = 29;
+    if (days < md) break;
+    days -= md;
+    m++;
+  }
+
+  out.year  = (uint8_t)(y - 2000);
+  out.month = (uint8_t)(m + 1);
+  out.date  = (uint8_t)(days + 1);
+}
+
+static bool sntpGetUnixTime(const char* host, uint32_t& unixSec)
+{
+  uint8_t ip[4]{};
+  if (!resolveHost(host, ip)) {
+    DBG.error("NTP: resolveHost(%s) failed", host);
+    return false;
+  }
+
+  DBG.info("NTP: %s -> %u.%u.%u.%u", host, ip[0], ip[1], ip[2], ip[3]);
+
+  const uint8_t sn = 2;
+  const uint16_t lport = 40000;
+
+  uint8_t pkt[48]{};
+  pkt[0] = 0x1B;
+
+  if (socket(sn, Sn_MR_UDP, lport, 0) != sn) {
+    DBG.error("NTP: socket() failed");
+    close(sn);
+    return false;
+  }
+
+  int32_t s = sendto(sn, pkt, sizeof(pkt), ip, NTP_PORT);
+  if (s != (int32_t)sizeof(pkt)) {
+    DBG.error("NTP: sendto failed s=%ld", (long)s);
+    close(sn);
+    return false;
+  }
+
+  uint32_t t0 = HAL_GetTick();
+  while ((HAL_GetTick() - t0) < NTP_TIMEOUT_MS) {
+    uint8_t rx[48];
+    uint8_t rip[4];
+    uint16_t rport = 0;
+    int32_t r = recvfrom(sn, rx, sizeof(rx), rip, &rport);
+    if (r >= 48) {
+      close(sn);
+
+      uint32_t ntpSec =
+        ((uint32_t)rx[40] << 24) | ((uint32_t)rx[41] << 16) |
+        ((uint32_t)rx[42] <<  8) | ((uint32_t)rx[43] <<  0);
+
+      const uint32_t NTP_TO_UNIX = 2208988800UL;
+      if (ntpSec < NTP_TO_UNIX) {
+        DBG.error("NTP: bad ntpSec=%lu", (unsigned long)ntpSec);
+        return false;
+      }
+
+      unixSec = ntpSec - NTP_TO_UNIX;
+      return true;
+    }
+
+    HAL_Delay(10);
+  }
+
+  DBG.error("NTP: timeout");
+  close(sn);
+  return false;
+}
+
 // ============================================================================
 
 App::App()
@@ -347,9 +474,19 @@ void App::init()
   m_modbus.init();
   m_sdBackup.init();
 
-  // ВАЖНО: очистить возможный старый/битый журнал (иначе в пачках останется "ts":lu)
-  // После того как убедишься, что всё ок — можешь закомментировать.
-  (void)m_sdBackup.remove();
+  bool loaded = Cfg().loadFromSd(RUNTIME_CONFIG_FILENAME);
+  if (!loaded) {
+    DBG.warn("CFG: not loaded -> creating %s", RUNTIME_CONFIG_FILENAME);
+    (void)Cfg().saveToSd(RUNTIME_CONFIG_FILENAME);
+  }
+  Cfg().log();
+
+  // Подхват runtime config с SD
+  (void)Cfg().loadFromSd(RUNTIME_CONFIG_FILENAME);
+  Cfg().log();
+
+  // Не удаляем журнал автоматически — иначе можно потерять данные
+  // (void)m_sdBackup.remove();
 
   m_gsm.powerOff();
 
@@ -357,15 +494,88 @@ void App::init()
   DBG.info("Mode: %s", (m_mode == SystemMode::Debug) ? "DEBUG" : "SLEEP");
   logNetSelect("INIT");
 
+  DBG.info("Опрос %lu сек, отправка раз в %lu опросов",
+           (unsigned long)Cfg().poll_interval_sec,
+           (unsigned long)Cfg().send_interval_polls);
+
   if (m_mode == SystemMode::Debug) {
     DBG.info(">>> РЕЖИМ: DEBUG <<<");
-    DBG.info("Опрос %d сек", (int)Config::POLL_INTERVAL_SEC);
     ledOn();
   } else {
     DBG.info(">>> РЕЖИМ: SLEEP <<<");
-    DBG.info("Опрос %d сек", (int)Config::POLL_INTERVAL_SEC);
     ledBlink(3, 200);
   }
+}
+
+bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
+{
+  const RuntimeConfig& c = Cfg();
+  if (!c.ntp_enabled) {
+    if (verbose) DBG.info("[%s] NTP: disabled", tag);
+    return false;
+  }
+
+  DateTime cur{};
+  if (!m_rtc.getTime(cur)) {
+    DBG.error("[%s] NTP: DS3231 getTime failed", tag);
+    return false;
+  }
+
+  const bool invalid = rtcLooksInvalid(cur);
+  const uint32_t lastSync = loadLastSyncUnix();
+  const uint32_t nowUnix = (uint32_t)(toUnixMs(cur) / 1000ULL);
+
+  bool need = false;
+  const char* reason = "";
+
+  if (invalid) {
+    need = true; reason = "RTC invalid";
+  } else if (lastSync == 0) {
+    need = true; reason = "first sync";
+  } else {
+    uint32_t diff = nowUnix - lastSync;
+    if (diff >= c.ntp_resync_sec) {
+      need = true; reason = "periodic";
+    } else {
+      if (verbose) DBG.info("[%s] NTP: skip (diff=%lu sec)", tag, (unsigned long)diff);
+      return false;
+    }
+  }
+
+  char curStr[32]{};
+  cur.formatISO8601(curStr);
+  DBG.info("[%s] NTP: need sync (%s), RTC=%s lastSync=%lu", tag, reason, curStr, (unsigned long)lastSync);
+
+  if (readChannel() != LinkChannel::Eth) {
+    DBG.error("[%s] NTP: skip, channel is not ETH", tag);
+    return false;
+  }
+  if (!ensureEthReadyAndLinkUp()) {
+    DBG.error("[%s] NTP: skip, ETH not ready/link down", tag);
+    return false;
+  }
+
+  uint32_t unixSec = 0;
+  if (!sntpGetUnixTime(c.ntp_host, unixSec)) {
+    DBG.error("[%s] NTP: failed", tag);
+    return false;
+  }
+
+  DateTime ntpDt{};
+  unixToDateTime(unixSec, ntpDt);
+
+  char ntpStr[32]{};
+  ntpDt.formatISO8601(ntpStr);
+  DBG.info("[%s] NTP: set DS3231 to %s (unix=%lu)", tag, ntpStr, (unsigned long)unixSec);
+
+  if (!m_rtc.setTimeAutoDOW(ntpDt)) {
+    DBG.error("[%s] NTP: DS3231 setTimeAutoDOW failed", tag);
+    return false;
+  }
+
+  storeLastSyncUnix(unixSec);
+  DBG.info("[%s] NTP: sync OK", tag);
+  return true;
 }
 
 [[noreturn]] void App::run()
@@ -374,14 +584,12 @@ void App::init()
   bool firstCycle = true;
 
   while (true) {
-    if (eth.ready()) {
-      eth.tick();
-    }
+    if (eth.ready()) eth.tick();
 
     m_mode = readMode();
 
     const bool doSelfTest = firstCycle || wokeFromStop;
-    const char* tag = firstCycle ? "BOOT" : "WAKE";
+    const char* tag = firstCycle ? "BOOT" : (wokeFromStop ? "WAKE" : "RUN");
 
     if (doSelfTest) {
       DBG.info("========================================================================");
@@ -389,6 +597,9 @@ void App::init()
       logNetSelect(tag);
       DBG.info("========================================================================");
     }
+
+    // NTP
+    (void)syncRtcWithNtpIfNeeded(tag, doSelfTest);
 
     // ---- Modbus опрос ----
     DateTime ts{};
@@ -404,38 +615,36 @@ void App::init()
 
     ledBlink(1, 50);
 
-    // ---- SD журнал (JSONL: одна строка = один объект) ----
-    char line[256];
+    // ---- SD журнал ----
+    char line[320];
     int lenLine = std::snprintf(
       line, sizeof(line),
       "{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
       "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}",
       tsStr,
-      Config::METRIC_ID,
+      Cfg().metric_id,
       val,
       (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
       (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
     );
 
     if (lenLine > 0 && lenLine < (int)sizeof(line)) {
-      if (!m_sdBackup.appendLine(line)) {
-        DBG.error("SD: appendLine failed");
-      }
+      if (!m_sdBackup.appendLine(line)) DBG.error("SD: appendLine failed");
     } else {
       DBG.error("SD: snprintf line failed/overflow (len=%d)", lenLine);
     }
 
-    // ---- Тестовая отправка на сервер на BOOT/WAKE ----
+    // ---- Self-test POST on BOOT/WAKE ----
     if (doSelfTest) {
       LinkChannel ch = readChannel();
 
-      char j[256];
+      char j[320];
       int len = std::snprintf(
         j, sizeof(j),
         "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
         "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
         tsStr,
-        Config::METRIC_ID,
+        Cfg().metric_id,
         val,
         (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
         (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
@@ -448,21 +657,21 @@ void App::init()
           if (!ensureEthReadyAndLinkUp()) {
             DBG.error("[%s] ETH not ready/link -> POST skipped", tag);
           } else {
-            if (startsWith(Config::SERVER_URL, "https://")) {
+            if (startsWith(Cfg().server_url, "https://")) {
               DBG.data("TB payload (self-test): %s", j);
               http = HttpsW5500::postJson(
-                Config::SERVER_URL,
-                Config::SERVER_AUTH,
+                Cfg().server_url,
+                Cfg().server_auth_b64,
                 j,
                 (uint16_t)std::strlen(j),
                 20000
               );
               DBG.info("[%s] ETH HTTPS POST code=%d", tag, http);
-            } else if (startsWith(Config::SERVER_URL, "http://")) {
+            } else if (startsWith(Cfg().server_url, "http://")) {
               DBG.data("TB payload (self-test): %s", j);
               http = httpPostPlainW5500(
-                Config::SERVER_URL,
-                Config::SERVER_AUTH,
+                Cfg().server_url,
+                Cfg().server_auth_b64,
                 j,
                 (uint16_t)std::strlen(j),
                 15000
@@ -475,7 +684,7 @@ void App::init()
         } else {
           m_gsm.powerOn();
           if (m_gsm.init() == GsmStatus::Ok) {
-            http = m_gsm.httpPost(Config::SERVER_URL, j, (uint16_t)std::strlen(j));
+            http = m_gsm.httpPost(Cfg().server_url, j, (uint16_t)std::strlen(j));
             DBG.info("[%s] GSM POST code=%d", tag, http);
             m_gsm.disconnect();
           } else {
@@ -488,19 +697,25 @@ void App::init()
       }
     }
 
-    // ---- Обычная отправка журнала ----
-    transmitBuffer();
+    // ---- Обычная отправка: раз в N опросов ----
+    m_pollCounter++;
+    if (m_pollCounter >= Cfg().send_interval_polls) {
+      m_pollCounter = 0;
+      transmitBuffer();
+    }
 
     // ---- Сон/ожидание ----
+    const uint32_t pollSec = Cfg().poll_interval_sec;
+
     if (m_mode == SystemMode::Sleep) {
-      DBG.info("Stop Mode %d сек...", (int)Config::POLL_INTERVAL_SEC);
+      DBG.info("Stop Mode %lu сек...", (unsigned long)pollSec);
       ledOff();
-      m_power.enterStopMode(Config::POLL_INTERVAL_SEC);
+      m_power.enterStopMode(pollSec);
       DBG.info("...проснулись!");
       wokeFromStop = true;
     } else {
-      DBG.info("Ожидание %d сек", (int)Config::POLL_INTERVAL_SEC);
-      HAL_Delay(Config::POLL_INTERVAL_SEC * 1000UL);
+      DBG.info("Ожидание %lu сек", (unsigned long)pollSec);
+      HAL_Delay(pollSec * 1000UL);
       wokeFromStop = false;
     }
 
@@ -525,7 +740,6 @@ void App::transmitBuffer()
     return;
   }
 
-  // GSM
   m_gsm.powerOn();
   if (m_gsm.init() != GsmStatus::Ok) {
     DBG.error("GSM init fail (журнал остаётся на SD)");
@@ -551,13 +765,13 @@ void App::transmitSingle(float value, const DateTime& dt)
   char tsStr[24];
   u64_to_dec(tsStr, sizeof(tsStr), unixMs);
 
-  char j[256];
+  char j[320];
   int len = std::snprintf(
     j, sizeof(j),
     "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
     "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
     tsStr,
-    Config::METRIC_ID,
+    Cfg().metric_id,
     value,
     (unsigned)dt.year, (unsigned)dt.month, (unsigned)dt.date,
     (unsigned)dt.hours, (unsigned)dt.minutes, (unsigned)dt.seconds
@@ -566,7 +780,7 @@ void App::transmitSingle(float value, const DateTime& dt)
 
   m_gsm.powerOn();
   if (m_gsm.init() == GsmStatus::Ok) {
-    auto s = m_gsm.httpPost(Config::SERVER_URL, j, (uint16_t)len);
+    auto s = m_gsm.httpPost(Cfg().server_url, j, (uint16_t)len);
     DBG.info("DEBUG HTTP: %d", (int)s);
     m_gsm.disconnect();
   } else {
@@ -609,19 +823,19 @@ void App::retransmitBackup()
         return;
       }
 
-      if (startsWith(Config::SERVER_URL, "https://")) {
+      if (startsWith(Cfg().server_url, "https://")) {
         http = HttpsW5500::postJson(
-          Config::SERVER_URL,
-          Config::SERVER_AUTH,
+          Cfg().server_url,
+          Cfg().server_auth_b64,
           m_json,
           (uint16_t)std::strlen(m_json),
           20000
         );
         DBG.info("ETH HTTPS: %d", http);
-      } else if (startsWith(Config::SERVER_URL, "http://")) {
+      } else if (startsWith(Cfg().server_url, "http://")) {
         http = httpPostPlainW5500(
-          Config::SERVER_URL,
-          Config::SERVER_AUTH,
+          Cfg().server_url,
+          Cfg().server_auth_b64,
           m_json,
           (uint16_t)std::strlen(m_json),
           15000
@@ -632,7 +846,7 @@ void App::retransmitBackup()
         return;
       }
     } else {
-      http = m_gsm.httpPost(Config::SERVER_URL, m_json, (uint16_t)std::strlen(m_json));
+      http = m_gsm.httpPost(Cfg().server_url, m_json, (uint16_t)std::strlen(m_json));
       DBG.info("GSM HTTP: %d", http);
     }
 

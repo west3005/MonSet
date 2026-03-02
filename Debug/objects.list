@@ -9,6 +9,7 @@
 "./Core/Src/mbedtls_x509_fatfs.o"
 "./Core/Src/modbus_rtu.o"
 "./Core/Src/power_manager.o"
+"./Core/Src/runtime_config.o"
 "./Core/Src/sd_backup.o"
 "./Core/Src/sd_card_spi.o"
 "./Core/Src/sdio.o"

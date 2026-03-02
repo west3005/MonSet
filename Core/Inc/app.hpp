@@ -1,13 +1,15 @@
 /**
  * ================================================================
- * @file    app.hpp
- * @brief   Главный класс приложения — собирает все модули.
+ * @file app.hpp
+ * @brief Главный класс приложения — собирает все модули.
  * ================================================================
  */
 #ifndef APP_HPP
 #define APP_HPP
 
 #include "config.hpp"
+#include "runtime_config.hpp"
+
 #include "debug_uart.hpp"
 #include "ds3231.hpp"
 #include "modbus_rtu.hpp"
@@ -17,58 +19,44 @@
 #include "data_buffer.hpp"
 #include "power_manager.hpp"
 
-/**
- * @brief  Режим работы
- */
 enum class SystemMode : uint8_t {
-    Sleep = 0,   /* Энергосбережение */
-    Debug = 1    /* Постоянная отправка */
+  Sleep = 0,
+  Debug = 1
 };
 
-/**
- * @brief  Главный класс приложения.
- *         Инкапсулирует все модули и бизнес-логику.
- *
- *         Порядок:
- *         1. Конструктор (передаём HAL-хэндлы)
- *         2. init()       — инициализация всех модулей
- *         3. run()        — бесконечный цикл
- */
 class App {
 public:
-    App();
+  App();
 
-    /** Инициализация всех модулей */
-    void init();
-
-    /** Главный цикл (никогда не возвращается) */
-    [[noreturn]] void run();
+  void init();
+  [[noreturn]] void run();
 
 private:
-    /* Модули */
-    DS3231          m_rtc;
-    ModbusRTU       m_modbus;
-    SIM800L         m_gsm;
-    SdBackup        m_sdBackup;
-    SensorReader    m_sensor;
-    DataBuffer      m_buffer;
-    PowerManager    m_power;
+  DS3231 m_rtc;
+  ModbusRTU m_modbus;
+  SIM800L m_gsm;
+  SdBackup m_sdBackup;
+  SensorReader m_sensor;
+  DataBuffer m_buffer;
+  PowerManager m_power;
 
-    /* Состояние */
-    SystemMode      m_mode = SystemMode::Sleep;
+  SystemMode m_mode = SystemMode::Sleep;
 
-    /* JSON буфер (статический, большой) */
-    char            m_json[Config::JSON_BUFFER_SIZE]{};
+  char m_json[Config::JSON_BUFFER_SIZE]{};
 
-    /* Методы */
-    SystemMode readMode();
-    void       ledOn();
-    void       ledOff();
-    void       ledBlink(uint8_t count, uint32_t ms);
+  uint32_t m_pollCounter = 0;
 
-    void       transmitBuffer();
-    void       transmitSingle(float value, const DateTime& dt);
-    void retransmitBackup();
+  SystemMode readMode();
+  void ledOn();
+  void ledOff();
+  void ledBlink(uint8_t count, uint32_t ms);
+
+  void transmitBuffer();
+  void transmitSingle(float value, const DateTime& dt);
+  void retransmitBackup();
+
+  // NTP sync (использует Cfg().ntp_* параметры)
+  bool syncRtcWithNtpIfNeeded(const char* tag, bool verbose);
 };
 
 #endif /* APP_HPP */

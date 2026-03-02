@@ -13,6 +13,7 @@ CPP_SRCS += \
 ../Core/Src/main.cpp \
 ../Core/Src/modbus_rtu.cpp \
 ../Core/Src/power_manager.cpp \
+../Core/Src/runtime_config.cpp \
 ../Core/Src/sd_backup.cpp \
 ../Core/Src/sd_card_spi.cpp \
 ../Core/Src/sensor_reader.cpp \
@@ -59,6 +60,7 @@ OBJS += \
 ./Core/Src/mbedtls_x509_fatfs.o \
 ./Core/Src/modbus_rtu.o \
 ./Core/Src/power_manager.o \
+./Core/Src/runtime_config.o \
 ./Core/Src/sd_backup.o \
 ./Core/Src/sd_card_spi.o \
 ./Core/Src/sdio.o \
@@ -83,6 +85,7 @@ CPP_DEPS += \
 ./Core/Src/main.d \
 ./Core/Src/modbus_rtu.d \
 ./Core/Src/power_manager.d \
+./Core/Src/runtime_config.d \
 ./Core/Src/sd_backup.d \
 ./Core/Src/sd_card_spi.d \
 ./Core/Src/sensor_reader.d \
@@ -99,7 +102,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/app.cyclo ./Core/Src/app.d ./Core/Src/app.o ./Core/Src/app.su ./Core/Src/data_buffer.cyclo ./Core/Src/data_buffer.d ./Core/Src/data_buffer.o ./Core/Src/data_buffer.su ./Core/Src/debug_uart.cyclo ./Core/Src/debug_uart.d ./Core/Src/debug_uart.o ./Core/Src/debug_uart.su ./Core/Src/dma.cyclo ./Core/Src/dma.d ./Core/Src/dma.o ./Core/Src/dma.su ./Core/Src/ds3231.cyclo ./Core/Src/ds3231.d ./Core/Src/ds3231.o ./Core/Src/ds3231.su ./Core/Src/https_w5500.cyclo ./Core/Src/https_w5500.d ./Core/Src/https_w5500.o ./Core/Src/https_w5500.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/mbedtls_entropy_alt.cyclo ./Core/Src/mbedtls_entropy_alt.d ./Core/Src/mbedtls_entropy_alt.o ./Core/Src/mbedtls_entropy_alt.su ./Core/Src/mbedtls_x509_fatfs.cyclo ./Core/Src/mbedtls_x509_fatfs.d ./Core/Src/mbedtls_x509_fatfs.o ./Core/Src/mbedtls_x509_fatfs.su ./Core/Src/modbus_rtu.cyclo ./Core/Src/modbus_rtu.d ./Core/Src/modbus_rtu.o ./Core/Src/modbus_rtu.su ./Core/Src/power_manager.cyclo ./Core/Src/power_manager.d ./Core/Src/power_manager.o ./Core/Src/power_manager.su ./Core/Src/sd_backup.cyclo ./Core/Src/sd_backup.d ./Core/Src/sd_backup.o ./Core/Src/sd_backup.su ./Core/Src/sd_card_spi.cyclo ./Core/Src/sd_card_spi.d ./Core/Src/sd_card_spi.o ./Core/Src/sd_card_spi.su ./Core/Src/sdio.cyclo ./Core/Src/sdio.d ./Core/Src/sdio.o ./Core/Src/sdio.su ./Core/Src/sensor_reader.cyclo ./Core/Src/sensor_reader.d ./Core/Src/sensor_reader.o ./Core/Src/sensor_reader.su ./Core/Src/sim800l.cyclo ./Core/Src/sim800l.d ./Core/Src/sim800l.o ./Core/Src/sim800l.su ./Core/Src/spi.cyclo ./Core/Src/spi.d ./Core/Src/spi.o ./Core/Src/spi.su ./Core/Src/stm32f4xx_hal_msp.cyclo ./Core/Src/stm32f4xx_hal_msp.d ./Core/Src/stm32f4xx_hal_msp.o ./Core/Src/stm32f4xx_hal_msp.su ./Core/Src/stm32f4xx_hal_sdram.cyclo ./Core/Src/stm32f4xx_hal_sdram.d ./Core/Src/stm32f4xx_hal_sdram.o ./Core/Src/stm32f4xx_hal_sdram.su ./Core/Src/stm32f4xx_it.cyclo ./Core/Src/stm32f4xx_it.d ./Core/Src/stm32f4xx_it.o ./Core/Src/stm32f4xx_it.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f4xx.cyclo ./Core/Src/system_stm32f4xx.d ./Core/Src/system_stm32f4xx.o ./Core/Src/system_stm32f4xx.su ./Core/Src/w5500_net.cyclo ./Core/Src/w5500_net.d ./Core/Src/w5500_net.o ./Core/Src/w5500_net.su ./Core/Src/w5500_port.cyclo ./Core/Src/w5500_port.d ./Core/Src/w5500_port.o ./Core/Src/w5500_port.su ./Core/Src/wizchip_init.cyclo ./Core/Src/wizchip_init.d ./Core/Src/wizchip_init.o ./Core/Src/wizchip_init.su
+	-$(RM) ./Core/Src/app.cyclo ./Core/Src/app.d ./Core/Src/app.o ./Core/Src/app.su ./Core/Src/data_buffer.cyclo ./Core/Src/data_buffer.d ./Core/Src/data_buffer.o ./Core/Src/data_buffer.su ./Core/Src/debug_uart.cyclo ./Core/Src/debug_uart.d ./Core/Src/debug_uart.o ./Core/Src/debug_uart.su ./Core/Src/dma.cyclo ./Core/Src/dma.d ./Core/Src/dma.o ./Core/Src/dma.su ./Core/Src/ds3231.cyclo ./Core/Src/ds3231.d ./Core/Src/ds3231.o ./Core/Src/ds3231.su ./Core/Src/https_w5500.cyclo ./Core/Src/https_w5500.d ./Core/Src/https_w5500.o ./Core/Src/https_w5500.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/mbedtls_entropy_alt.cyclo ./Core/Src/mbedtls_entropy_alt.d ./Core/Src/mbedtls_entropy_alt.o ./Core/Src/mbedtls_entropy_alt.su ./Core/Src/mbedtls_x509_fatfs.cyclo ./Core/Src/mbedtls_x509_fatfs.d ./Core/Src/mbedtls_x509_fatfs.o ./Core/Src/mbedtls_x509_fatfs.su ./Core/Src/modbus_rtu.cyclo ./Core/Src/modbus_rtu.d ./Core/Src/modbus_rtu.o ./Core/Src/modbus_rtu.su ./Core/Src/power_manager.cyclo ./Core/Src/power_manager.d ./Core/Src/power_manager.o ./Core/Src/power_manager.su ./Core/Src/runtime_config.cyclo ./Core/Src/runtime_config.d ./Core/Src/runtime_config.o ./Core/Src/runtime_config.su ./Core/Src/sd_backup.cyclo ./Core/Src/sd_backup.d ./Core/Src/sd_backup.o ./Core/Src/sd_backup.su ./Core/Src/sd_card_spi.cyclo ./Core/Src/sd_card_spi.d ./Core/Src/sd_card_spi.o ./Core/Src/sd_card_spi.su ./Core/Src/sdio.cyclo ./Core/Src/sdio.d ./Core/Src/sdio.o ./Core/Src/sdio.su ./Core/Src/sensor_reader.cyclo ./Core/Src/sensor_reader.d ./Core/Src/sensor_reader.o ./Core/Src/sensor_reader.su ./Core/Src/sim800l.cyclo ./Core/Src/sim800l.d ./Core/Src/sim800l.o ./Core/Src/sim800l.su ./Core/Src/spi.cyclo ./Core/Src/spi.d ./Core/Src/spi.o ./Core/Src/spi.su ./Core/Src/stm32f4xx_hal_msp.cyclo ./Core/Src/stm32f4xx_hal_msp.d ./Core/Src/stm32f4xx_hal_msp.o ./Core/Src/stm32f4xx_hal_msp.su ./Core/Src/stm32f4xx_hal_sdram.cyclo ./Core/Src/stm32f4xx_hal_sdram.d ./Core/Src/stm32f4xx_hal_sdram.o ./Core/Src/stm32f4xx_hal_sdram.su ./Core/Src/stm32f4xx_it.cyclo ./Core/Src/stm32f4xx_it.d ./Core/Src/stm32f4xx_it.o ./Core/Src/stm32f4xx_it.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32f4xx.cyclo ./Core/Src/system_stm32f4xx.d ./Core/Src/system_stm32f4xx.o ./Core/Src/system_stm32f4xx.su ./Core/Src/w5500_net.cyclo ./Core/Src/w5500_net.d ./Core/Src/w5500_net.o ./Core/Src/w5500_net.su ./Core/Src/w5500_port.cyclo ./Core/Src/w5500_port.d ./Core/Src/w5500_port.o ./Core/Src/w5500_port.su ./Core/Src/wizchip_init.cyclo ./Core/Src/wizchip_init.d ./Core/Src/wizchip_init.o ./Core/Src/wizchip_init.su
 
 .PHONY: clean-Core-2f-Src
 
