@@ -1,33 +1,33 @@
-../Core/Src/app.cpp:40:20:const char* chStr(LinkChannel)	2
-../Core/Src/app.cpp:96:13:bool isIpv4Literal(const char*)	6
-../Core/Src/app.cpp:265:13:bool isLeap(int)	4
-../Core/Src/app.cpp:267:17:uint32_t daysBeforeMonth(int, int)	3
-../Core/Src/app.cpp:275:17:uint64_t toUnixMs(const DateTime&)	3
-../Core/Src/app.cpp:294:13:void u64_to_dec(char*, size_t, uint64_t)	9
-../Core/Src/app.cpp:336:13:bool rtcLooksInvalid(const DateTime&)	7
-../Core/Src/app.cpp:345:13:bool isLeapYearFull(int)	4
-../Core/Src/app.cpp:350:13:void unixToDateTime(uint32_t, DateTime&)	7
-../Core/Src/app.cpp:34:20:LinkChannel readChannel()	2
-../Core/Src/app.cpp:45:13:void logNetSelect(const char*)	1
-../Core/Src/app.cpp:321:17:uint32_t bkpRead(uint32_t)	1
-../Core/Src/app.cpp:324:17:uint32_t loadLastSyncUnix()	2
-../Core/Src/app.cpp:62:13:bool ethLinkUpAfterInit()	1
-../Core/Src/app.cpp:69:13:bool ensureEthReadyAndLinkUp()	4
-../Core/Src/app.cpp:144:13:bool resolveHost(const char*, uint8_t*)	8
-../Core/Src/app.cpp:382:13:bool sntpGetUnixTime(const char*, uint32_t&)	7
-../Core/Src/app.cpp:322:17:void bkpWrite(uint32_t, uint32_t)	1
-../Core/Src/app.cpp:330:13:void storeLastSyncUnix(uint32_t)	1
-../Core/Src/app.cpp:52:13:bool startsWith(const char*, const char*)	3
-../Core/Src/app.cpp:105:13:bool parseHttpUrl(const char*, UrlParts&)	13
-../Core/Src/app.cpp:168:12:int httpPostPlainW5500(const char*, const char*, const char*, uint16_t, uint32_t)	19
-../Core/Src/app.cpp:444:1:App::App()	2
-../Core/Src/app.cpp:455:12:SystemMode App::readMode()	2
-../Core/Src/app.cpp:461:6:void App::ledOn()	1
-../Core/Src/app.cpp:462:6:void App::ledOff()	1
-../Core/Src/app.cpp:464:6:void App::ledBlink(uint8_t, uint32_t)	2
-../Core/Src/app.cpp:469:6:void App::init()	3
-../Core/Src/app.cpp:503:6:bool App::syncRtcWithNtpIfNeeded(const char*, bool)	12
-../Core/Src/app.cpp:750:6:void App::transmitSingle(float, const DateTime&)	4
-../Core/Src/app.cpp:785:6:void App::retransmitBackup()	12
-../Core/Src/app.cpp:719:6:void App::transmitBuffer()	5
-../Core/Src/app.cpp:574:19:void App::run()	17
+../Core/Src/app.cpp:41:20:const char* chStr(LinkChannel)	2
+../Core/Src/app.cpp:97:13:bool isIpv4Literal(const char*)	6
+../Core/Src/app.cpp:266:13:bool isLeap(int)	4
+../Core/Src/app.cpp:268:17:uint32_t daysBeforeMonth(int, int)	3
+../Core/Src/app.cpp:276:17:uint64_t toUnixMs(const DateTime&)	3
+../Core/Src/app.cpp:295:13:void u64_to_dec(char*, size_t, uint64_t)	9
+../Core/Src/app.cpp:337:13:bool rtcLooksInvalid(const DateTime&)	7
+../Core/Src/app.cpp:346:13:bool isLeapYearFull(int)	4
+../Core/Src/app.cpp:351:13:void unixToDateTime(uint32_t, DateTime&)	7
+../Core/Src/app.cpp:35:20:LinkChannel readChannel()	2
+../Core/Src/app.cpp:46:13:void logNetSelect(const char*)	1
+../Core/Src/app.cpp:322:17:uint32_t bkpRead(uint32_t)	1
+../Core/Src/app.cpp:325:17:uint32_t loadLastSyncUnix()	2
+../Core/Src/app.cpp:63:13:bool ethLinkUpAfterInit()	1
+../Core/Src/app.cpp:70:13:bool ensureEthReadyAndLinkUp()	4
+../Core/Src/app.cpp:145:13:bool resolveHost(const char*, uint8_t*)	8
+../Core/Src/app.cpp:383:13:bool sntpGetUnixTime(const char*, uint32_t&)	7
+../Core/Src/app.cpp:323:17:void bkpWrite(uint32_t, uint32_t)	1
+../Core/Src/app.cpp:331:13:void storeLastSyncUnix(uint32_t)	1
+../Core/Src/app.cpp:53:13:bool startsWith(const char*, const char*)	3
+../Core/Src/app.cpp:106:13:bool parseHttpUrl(const char*, UrlParts&)	13
+../Core/Src/app.cpp:169:12:int httpPostPlainW5500(const char*, const char*, const char*, uint16_t, uint32_t)	19
+../Core/Src/app.cpp:445:1:App::App()	2
+../Core/Src/app.cpp:456:12:SystemMode App::readMode()	2
+../Core/Src/app.cpp:462:6:void App::ledOn()	1
+../Core/Src/app.cpp:463:6:void App::ledOff()	1
+../Core/Src/app.cpp:465:6:void App::ledBlink(uint8_t, uint32_t)	2
+../Core/Src/app.cpp:470:6:void App::init()	4
+../Core/Src/app.cpp:511:6:bool App::syncRtcWithNtpIfNeeded(const char*, bool)	12
+../Core/Src/app.cpp:759:6:void App::transmitSingle(float, const DateTime&)	4
+../Core/Src/app.cpp:794:6:void App::retransmitBackup()	12
+../Core/Src/app.cpp:728:6:void App::transmitBuffer()	5
+../Core/Src/app.cpp:582:19:void App::run()	17

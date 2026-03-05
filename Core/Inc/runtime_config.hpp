@@ -1,5 +1,4 @@
 #pragma once
-
 #include "config.hpp"
 #include "stm32f4xx_hal.h"
 #include <cstdint>
@@ -40,13 +39,13 @@ struct RuntimeConfig
 
   // --- Modbus ---
   uint8_t  modbus_slave = 1;
-  uint8_t  modbus_func  = 4;
+  uint8_t  modbus_func = 4;
   uint16_t modbus_start_reg = 0;
-  uint16_t modbus_num_regs  = 2;
+  uint16_t modbus_num_regs = 2;
 
   // --- sensor scale ---
   float sensor_zero_level = 0.0f;
-  float sensor_divider    = 1000.0f;
+  float sensor_divider = 1000.0f;
 
   // --- time / NTP ---
   bool ntp_enabled = true;
@@ -58,8 +57,8 @@ struct RuntimeConfig
 
   bool loadFromSd(const char* filename);
   bool saveToSd(const char* filename) const;
-  bool loadFromJson(const char* json, size_t len);
 
+  bool loadFromJson(const char* json, size_t len);
   void log() const;
 };
 

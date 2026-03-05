@@ -38,7 +38,8 @@ Core/Src/w5500_net.o: ../Core/Src/w5500_net.cpp ../Core/Inc/w5500_net.hpp \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Internet/DHCP/dhcp.h \
  ../Core/Inc/w5500_port.h ../Core/Inc/runtime_config.hpp \
- ../Core/Inc/config.hpp ../Core/Inc/debug_uart.hpp ../Core/Inc/main.h \
+ ../Core/Inc/config.hpp ../Core/Inc/board_pins.hpp \
+ ../Core/Inc/debug_uart.hpp ../Core/Inc/main.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h
 ../Core/Inc/w5500_net.hpp:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -82,6 +83,7 @@ C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibra
 ../Core/Inc/w5500_port.h:
 ../Core/Inc/runtime_config.hpp:
 ../Core/Inc/config.hpp:
+../Core/Inc/board_pins.hpp:
 ../Core/Inc/debug_uart.hpp:
 ../Core/Inc/main.h:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h:

@@ -35,10 +35,10 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/runtime_config.hpp ../Core/Inc/debug_uart.hpp \
- ../Core/Inc/main.h ../Core/Inc/ds3231.hpp ../Core/Inc/modbus_rtu.hpp \
- ../Core/Inc/sim800l.hpp ../Core/Inc/sd_backup.hpp \
- ../Middlewares/Third_Party/FatFs/src/ff.h \
+ ../Core/Inc/board_pins.hpp ../Core/Inc/runtime_config.hpp \
+ ../Core/Inc/debug_uart.hpp ../Core/Inc/main.h ../Core/Inc/ds3231.hpp \
+ ../Core/Inc/modbus_rtu.hpp ../Core/Inc/sim800l.hpp \
+ ../Core/Inc/sd_backup.hpp ../Middlewares/Third_Party/FatFs/src/ff.h \
  ../Middlewares/Third_Party/FatFs/src/integer.h ../FATFS/Target/ffconf.h \
  ../Core/Inc/main.h ../FATFS/Target/bsp_driver_sd.h ../FATFS/App/fatfs.h \
  ../Middlewares/Third_Party/FatFs/src/ff_gen_drv.h \
@@ -50,7 +50,7 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/wizchip_conf.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Internet/DHCP/dhcp.h \
- ../Core/Inc/https_w5500.hpp \
+ ../Core/Inc/https_w5500.hpp ../Core/Inc/cfg_uart_bridge.hpp \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/socket.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/wizchip_conf.h \
  C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Internet/DNS/dns.h \
@@ -92,6 +92,7 @@ Core/Src/app.o: ../Core/Src/app.cpp ../Core/Inc/app.hpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
+../Core/Inc/board_pins.hpp:
 ../Core/Inc/runtime_config.hpp:
 ../Core/Inc/debug_uart.hpp:
 ../Core/Inc/main.h:
@@ -118,6 +119,7 @@ C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibra
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/W5500/w5500.h:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Internet/DHCP/dhcp.h:
 ../Core/Inc/https_w5500.hpp:
+../Core/Inc/cfg_uart_bridge.hpp:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/socket.h:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Ethernet/wizchip_conf.h:
 C:/Users/My/STM32CubeIDE/workspace_1.13.2/MonSet/Middlewares/Third_Party/ioLibrary_Driver-master/Internet/DNS/dns.h:

@@ -34,7 +34,8 @@ Core/Src/sd_backup.o: ../Core/Src/sd_backup.cpp ../Core/Inc/sd_backup.hpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/config.hpp ../Middlewares/Third_Party/FatFs/src/ff.h \
+ ../Core/Inc/config.hpp ../Core/Inc/board_pins.hpp \
+ ../Middlewares/Third_Party/FatFs/src/ff.h \
  ../Middlewares/Third_Party/FatFs/src/integer.h ../FATFS/Target/ffconf.h \
  ../Core/Inc/main.h ../FATFS/Target/bsp_driver_sd.h ../FATFS/App/fatfs.h \
  ../Middlewares/Third_Party/FatFs/src/ff_gen_drv.h \
@@ -79,6 +80,7 @@ Core/Src/sd_backup.o: ../Core/Src/sd_backup.cpp ../Core/Inc/sd_backup.hpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/config.hpp:
+../Core/Inc/board_pins.hpp:
 ../Middlewares/Third_Party/FatFs/src/ff.h:
 ../Middlewares/Third_Party/FatFs/src/integer.h:
 ../FATFS/Target/ffconf.h:

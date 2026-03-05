@@ -35,7 +35,8 @@ Core/Src/sd_card_spi.o: ../Core/Src/sd_card_spi.cpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/config.hpp ../Core/Inc/debug_uart.hpp
+ ../Core/Inc/config.hpp ../Core/Inc/board_pins.hpp \
+ ../Core/Inc/debug_uart.hpp
 ../Core/Inc/sd_card_spi.hpp:
 ../Core/Inc/main.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -74,4 +75,5 @@ Core/Src/sd_card_spi.o: ../Core/Src/sd_card_spi.cpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/config.hpp:
+../Core/Inc/board_pins.hpp:
 ../Core/Inc/debug_uart.hpp:

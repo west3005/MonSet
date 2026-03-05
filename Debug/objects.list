@@ -1,4 +1,5 @@
 "./Core/Src/app.o"
+"./Core/Src/cfg_uart_bridge.o"
 "./Core/Src/data_buffer.o"
 "./Core/Src/debug_uart.o"
 "./Core/Src/dma.o"

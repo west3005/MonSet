@@ -33,6 +33,7 @@ static void MX_GPIO_Init();
 static void MX_USART1_UART_Init();
 static void MX_USART2_UART_Init();
 static void MX_USART3_UART_Init();
+static void MX_USART6_UART_Init();
 static void MX_I2C1_Init();
 static void MX_RTC_Init();
 static void MX_TIM6_Init();
@@ -48,6 +49,8 @@ extern "C" int main(void)
     SystemClock_Config();
     MX_GPIO_Init();
     MX_USART1_UART_Init();
+    MX_USART6_UART_Init();
+    DBG.setMirror(&huart6);
 
     DBG.init();
     DBG.info("HAL + Clock + GPIO + UART1 : OK");
@@ -235,6 +238,17 @@ static void MX_USART3_UART_Init()
     huart3.Init.HwFlowCtl    = UART_HWCONTROL_NONE;
     huart3.Init.OverSampling = UART_OVERSAMPLING_16;
     if (HAL_UART_Init(&huart3) != HAL_OK) { Error_Handler(); }
+}
+static void MX_USART6_UART_Init() {
+  huart6.Instance = USART6;
+  huart6.Init.BaudRate = 115200;
+  huart6.Init.WordLength = UART_WORDLENGTH_8B;
+  huart6.Init.StopBits = UART_STOPBITS_1;
+  huart6.Init.Parity = UART_PARITY_NONE;
+  huart6.Init.Mode = UART_MODE_TX_RX;
+  huart6.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart6.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart6) != HAL_OK) Error_Handler();
 }
 
 /* =============================================================

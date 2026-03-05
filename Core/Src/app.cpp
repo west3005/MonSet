@@ -8,6 +8,7 @@
 #include "w5500_net.hpp"
 #include "https_w5500.hpp"
 #include "runtime_config.hpp"
+#include "cfg_uart_bridge.hpp"
 
 #include <cctype>
 #include <cstring>
@@ -584,6 +585,7 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
   bool firstCycle = true;
 
   while (true) {
+	  CfgUartBridge_Tick();
     if (eth.ready()) eth.tick();
 
     m_mode = readMode();
@@ -715,7 +717,7 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
       wokeFromStop = true;
     } else {
       DBG.info("Ожидание %lu сек", (unsigned long)pollSec);
-      HAL_Delay(pollSec * 1000UL);
+      CfgUartBridge_DelayMs(pollSec * 1000UL);
       wokeFromStop = false;
     }
 

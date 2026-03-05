@@ -35,7 +35,7 @@ Core/Src/sensor_reader.o: ../Core/Src/sensor_reader.cpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/config.hpp ../Core/Inc/ds3231.hpp \
+ ../Core/Inc/config.hpp ../Core/Inc/board_pins.hpp ../Core/Inc/ds3231.hpp \
  ../Core/Inc/runtime_config.hpp ../Core/Inc/debug_uart.hpp
 ../Core/Inc/sensor_reader.hpp:
 ../Core/Inc/modbus_rtu.hpp:
@@ -76,6 +76,7 @@ Core/Src/sensor_reader.o: ../Core/Src/sensor_reader.cpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
 ../Core/Inc/config.hpp:
+../Core/Inc/board_pins.hpp:
 ../Core/Inc/ds3231.hpp:
 ../Core/Inc/runtime_config.hpp:
 ../Core/Inc/debug_uart.hpp:

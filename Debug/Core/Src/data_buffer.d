@@ -35,7 +35,8 @@ Core/Src/data_buffer.o: ../Core/Src/data_buffer.cpp \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h \
  ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h \
- ../Core/Inc/ds3231.hpp ../Core/Inc/main.h ../Core/Inc/debug_uart.hpp
+ ../Core/Inc/board_pins.hpp ../Core/Inc/ds3231.hpp ../Core/Inc/main.h \
+ ../Core/Inc/debug_uart.hpp
 ../Core/Inc/data_buffer.hpp:
 ../Core/Inc/config.hpp:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal.h:
@@ -73,6 +74,7 @@ Core/Src/data_buffer.o: ../Core/Src/data_buffer.cpp \
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_tim_ex.h:
 ../Drivers/STM32F4xx_HAL_Driver/Inc/stm32f4xx_hal_uart.h:
+../Core/Inc/board_pins.hpp:
 ../Core/Inc/ds3231.hpp:
 ../Core/Inc/main.h:
 ../Core/Inc/debug_uart.hpp:

@@ -1,10 +1,10 @@
 #include "runtime_config.hpp"
 #include "debug_uart.hpp"
 
-#include <cstring>
-#include <cstdio>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 extern "C" {
 #include "ff.h"
@@ -12,21 +12,16 @@ extern "C" {
 
 static RuntimeConfig g_cfg;
 
-RuntimeConfig& Cfg()
-{
-  return g_cfg;
-}
+RuntimeConfig& Cfg() { return g_cfg; }
 
-static void copyStr(char* dst, size_t dstSz, const char* src)
-{
+static void copyStr(char* dst, size_t dstSz, const char* src) {
   if (!dst || dstSz == 0) return;
   if (!src) { dst[0] = 0; return; }
   std::strncpy(dst, src, dstSz - 1);
   dst[dstSz - 1] = 0;
 }
 
-void RuntimeConfig::setDefaultsFromConfig()
-{
+void RuntimeConfig::setDefaultsFromConfig() {
   complex_enabled = false;
 
   copyStr(metric_id, sizeof(metric_id), Config::METRIC_ID);
@@ -38,33 +33,32 @@ void RuntimeConfig::setDefaultsFromConfig()
   eth_mode = (Config::NET_MODE == Config::NetMode::DHCP) ? EthMode::Dhcp : EthMode::Static;
 
   std::memcpy(w5500_mac, Config::W5500_MAC, 6);
-  std::memcpy(eth_ip,  Config::NET_IP,  4);
-  std::memcpy(eth_sn,  Config::NET_SN,  4);
-  std::memcpy(eth_gw,  Config::NET_GW,  4);
+  std::memcpy(eth_ip, Config::NET_IP, 4);
+  std::memcpy(eth_sn, Config::NET_SN, 4);
+  std::memcpy(eth_gw, Config::NET_GW, 4);
   std::memcpy(eth_dns, Config::NET_DNS, 4);
 
-  copyStr(gsm_apn,  sizeof(gsm_apn),  Config::GSM_APN);
+  copyStr(gsm_apn, sizeof(gsm_apn), Config::GSM_APN);
   copyStr(gsm_user, sizeof(gsm_user), Config::GSM_APN_USER);
   copyStr(gsm_pass, sizeof(gsm_pass), Config::GSM_APN_PASS);
 
-  poll_interval_sec   = Config::POLL_INTERVAL_SEC;
+  poll_interval_sec = Config::POLL_INTERVAL_SEC;
   send_interval_polls = Config::SEND_INTERVAL_POLLS;
 
-  modbus_slave     = Config::MODBUS_SLAVE;
-  modbus_func      = Config::MODBUS_FUNC_CODE;
+  modbus_slave = Config::MODBUS_SLAVE;
+  modbus_func = Config::MODBUS_FUNC_CODE;
   modbus_start_reg = Config::MODBUS_START_REG;
-  modbus_num_regs  = Config::MODBUS_NUM_REGS;
+  modbus_num_regs = Config::MODBUS_NUM_REGS;
 
   sensor_zero_level = Config::SENSOR_ZERO_LEVEL;
-  sensor_divider    = Config::SENSOR_DIVIDER;
+  sensor_divider = Config::SENSOR_DIVIDER;
 
   ntp_enabled = true;
   copyStr(ntp_host, sizeof(ntp_host), "pool.ntp.org");
   ntp_resync_sec = 86400;
 }
 
-bool RuntimeConfig::validateAndFix()
-{
+bool RuntimeConfig::validateAndFix() {
   bool ok = true;
 
   if (metric_id[0] == 0) ok = false;
@@ -80,22 +74,19 @@ bool RuntimeConfig::validateAndFix()
 
   if (sensor_divider == 0.0f) sensor_divider = 1000.0f;
 
-  if (ntp_resync_sec < 3600) ntp_resync_sec = 3600; // не чаще раза в час
+  if (ntp_resync_sec < 3600) ntp_resync_sec = 3600;
   if (ntp_host[0] == 0) copyStr(ntp_host, sizeof(ntp_host), "pool.ntp.org");
 
   return ok;
 }
 
-// --- tiny json helpers (очень простой парсер: "key": value) ---
-
-static const char* skipWs(const char* p)
-{
+// ---- tiny json helpers ("key": value), без escape ----
+static const char* skipWs(const char* p) {
   while (p && *p && std::isspace((unsigned char)*p)) p++;
   return p;
 }
 
-static const char* findKey(const char* json, const char* key)
-{
+static const char* findKey(const char* json, const char* key) {
   if (!json || !key) return nullptr;
 
   char pat[80];
@@ -103,6 +94,7 @@ static const char* findKey(const char* json, const char* key)
 
   const char* p = std::strstr(json, pat);
   if (!p) return nullptr;
+
   p += std::strlen(pat);
   p = skipWs(p);
   if (*p != ':') return nullptr;
@@ -110,48 +102,40 @@ static const char* findKey(const char* json, const char* key)
   return skipWs(p);
 }
 
-static bool jsonGetString(const char* json, const char* key, char* out, size_t outSz)
-{
+static bool jsonGetString(const char* json, const char* key, char* out, size_t outSz) {
   const char* p = findKey(json, key);
   if (!p) return false;
-
   if (*p != '"') return false;
-  p++;
 
+  p++;
   size_t i = 0;
-  while (*p && *p != '"' && (i + 1) < outSz) {
-    out[i++] = *p++;
-  }
+  while (*p && *p != '"' && (i + 1) < outSz) out[i++] = *p++;
   out[i] = 0;
   return (*p == '"');
 }
 
-static bool jsonGetU32(const char* json, const char* key, uint32_t& out)
-{
+static bool jsonGetU32(const char* json, const char* key, uint32_t& out) {
   const char* p = findKey(json, key);
   if (!p) return false;
   out = (uint32_t)std::strtoul(p, nullptr, 10);
   return true;
 }
 
-static bool jsonGetU16(const char* json, const char* key, uint16_t& out)
-{
+static bool jsonGetU16(const char* json, const char* key, uint16_t& out) {
   const char* p = findKey(json, key);
   if (!p) return false;
   out = (uint16_t)std::strtoul(p, nullptr, 10);
   return true;
 }
 
-static bool jsonGetU8(const char* json, const char* key, uint8_t& out)
-{
+static bool jsonGetU8(const char* json, const char* key, uint8_t& out) {
   const char* p = findKey(json, key);
   if (!p) return false;
   out = (uint8_t)std::strtoul(p, nullptr, 10);
   return true;
 }
 
-static bool jsonGetBool(const char* json, const char* key, bool& out)
-{
+static bool jsonGetBool(const char* json, const char* key, bool& out) {
   const char* p = findKey(json, key);
   if (!p) return false;
   if (std::strncmp(p, "true", 4) == 0)  { out = true;  return true; }
@@ -159,16 +143,14 @@ static bool jsonGetBool(const char* json, const char* key, bool& out)
   return false;
 }
 
-static bool jsonGetF32(const char* json, const char* key, float& out)
-{
+static bool jsonGetF32(const char* json, const char* key, float& out) {
   const char* p = findKey(json, key);
   if (!p) return false;
   out = std::strtof(p, nullptr);
   return true;
 }
 
-static bool parseIpv4Str(const char* s, uint8_t out[4])
-{
+static bool parseIpv4Str(const char* s, uint8_t out[4]) {
   if (!s) return false;
   unsigned a=0,b=0,c=0,d=0;
   if (std::sscanf(s, "%u.%u.%u.%u", &a,&b,&c,&d) != 4) return false;
@@ -177,15 +159,13 @@ static bool parseIpv4Str(const char* s, uint8_t out[4])
   return true;
 }
 
-static bool jsonGetIpv4(const char* json, const char* key, uint8_t out[4])
-{
+static bool jsonGetIpv4(const char* json, const char* key, uint8_t out[4]) {
   char tmp[32];
   if (!jsonGetString(json, key, tmp, sizeof(tmp))) return false;
   return parseIpv4Str(tmp, out);
 }
 
-static bool parseMacStr(const char* s, uint8_t out[6])
-{
+static bool parseMacStr(const char* s, uint8_t out[6]) {
   if (!s) return false;
   unsigned m[6]{};
   if (std::sscanf(s, "%x:%x:%x:%x:%x:%x", &m[0],&m[1],&m[2],&m[3],&m[4],&m[5]) != 6) return false;
@@ -194,20 +174,15 @@ static bool parseMacStr(const char* s, uint8_t out[6])
   return true;
 }
 
-static bool jsonGetMac(const char* json, const char* key, uint8_t out[6])
-{
+static bool jsonGetMac(const char* json, const char* key, uint8_t out[6]) {
   char tmp[32];
   if (!jsonGetString(json, key, tmp, sizeof(tmp))) return false;
   return parseMacStr(tmp, out);
 }
 
-// ----------------------------------------------------
-
-bool RuntimeConfig::loadFromJson(const char* json, size_t len)
-{
+bool RuntimeConfig::loadFromJson(const char* json, size_t len) {
   if (!json || len < 2) return false;
 
-  // начинаем с дефолтов и накладываем поверх
   RuntimeConfig tmp;
   tmp.setDefaultsFromConfig();
 
@@ -220,17 +195,17 @@ bool RuntimeConfig::loadFromJson(const char* json, size_t len)
 
   char ethMode[16]{};
   if (jsonGetString(json, "eth_mode", ethMode, sizeof(ethMode))) {
-    if (std::strcmp(ethMode, "dhcp") == 0)   tmp.eth_mode = EthMode::Dhcp;
+    if (std::strcmp(ethMode, "dhcp") == 0) tmp.eth_mode = EthMode::Dhcp;
     if (std::strcmp(ethMode, "static") == 0) tmp.eth_mode = EthMode::Static;
   }
 
   (void)jsonGetMac(json, "w5500_mac", tmp.w5500_mac);
-  (void)jsonGetIpv4(json, "eth_ip",  tmp.eth_ip);
-  (void)jsonGetIpv4(json, "eth_sn",  tmp.eth_sn);
-  (void)jsonGetIpv4(json, "eth_gw",  tmp.eth_gw);
+  (void)jsonGetIpv4(json, "eth_ip", tmp.eth_ip);
+  (void)jsonGetIpv4(json, "eth_sn", tmp.eth_sn);
+  (void)jsonGetIpv4(json, "eth_gw", tmp.eth_gw);
   (void)jsonGetIpv4(json, "eth_dns", tmp.eth_dns);
 
-  (void)jsonGetString(json, "gsm_apn",  tmp.gsm_apn,  sizeof(tmp.gsm_apn));
+  (void)jsonGetString(json, "gsm_apn", tmp.gsm_apn, sizeof(tmp.gsm_apn));
   (void)jsonGetString(json, "gsm_user", tmp.gsm_user, sizeof(tmp.gsm_user));
   (void)jsonGetString(json, "gsm_pass", tmp.gsm_pass, sizeof(tmp.gsm_pass));
 
@@ -238,12 +213,12 @@ bool RuntimeConfig::loadFromJson(const char* json, size_t len)
   (void)jsonGetU32(json, "send_interval_polls", tmp.send_interval_polls);
 
   (void)jsonGetU8(json, "modbus_slave", tmp.modbus_slave);
-  (void)jsonGetU8(json, "modbus_func",  tmp.modbus_func);
+  (void)jsonGetU8(json, "modbus_func", tmp.modbus_func);
   (void)jsonGetU16(json, "modbus_start_reg", tmp.modbus_start_reg);
-  (void)jsonGetU16(json, "modbus_num_regs",  tmp.modbus_num_regs);
+  (void)jsonGetU16(json, "modbus_num_regs", tmp.modbus_num_regs);
 
   (void)jsonGetF32(json, "sensor_zero_level", tmp.sensor_zero_level);
-  (void)jsonGetF32(json, "sensor_divider",    tmp.sensor_divider);
+  (void)jsonGetF32(json, "sensor_divider", tmp.sensor_divider);
 
   (void)jsonGetBool(json, "ntp_enabled", tmp.ntp_enabled);
   (void)jsonGetString(json, "ntp_host", tmp.ntp_host, sizeof(tmp.ntp_host));
@@ -254,8 +229,7 @@ bool RuntimeConfig::loadFromJson(const char* json, size_t len)
   return true;
 }
 
-bool RuntimeConfig::loadFromSd(const char* filename)
-{
+bool RuntimeConfig::loadFromSd(const char* filename) {
   setDefaultsFromConfig();
 
   FIL f;
@@ -278,8 +252,7 @@ bool RuntimeConfig::loadFromSd(const char* filename)
   }
 
   buf[br] = 0;
-
-  if (!loadFromJson(buf, br)) {
+  if (!loadFromJson(buf, (size_t)br)) {
     DBG.error("CFG: JSON parse fail -> defaults");
     setDefaultsFromConfig();
     validateAndFix();
@@ -290,13 +263,13 @@ bool RuntimeConfig::loadFromSd(const char* filename)
   return true;
 }
 
-bool RuntimeConfig::saveToSd(const char* filename) const
-{
+bool RuntimeConfig::saveToSd(const char* filename) const {
   char json[2048];
 
   char macStr[24];
   std::snprintf(macStr, sizeof(macStr), "%02X:%02X:%02X:%02X:%02X:%02X",
-                w5500_mac[0],w5500_mac[1],w5500_mac[2],w5500_mac[3],w5500_mac[4],w5500_mac[5]);
+                w5500_mac[0], w5500_mac[1], w5500_mac[2],
+                w5500_mac[3], w5500_mac[4], w5500_mac[5]);
 
   auto ipStr = [](const uint8_t ip[4], char* out, size_t outSz) {
     std::snprintf(out, outSz, "%u.%u.%u.%u", ip[0], ip[1], ip[2], ip[3]);
@@ -349,7 +322,9 @@ bool RuntimeConfig::saveToSd(const char* filename) const
     ethMode,
     macStr,
     ip, sn, gw, dns,
-    gsm_apn, gsm_user, gsm_pass,
+    gsm_apn,
+    gsm_user,
+    gsm_pass,
     (unsigned long)poll_interval_sec,
     (unsigned long)send_interval_polls,
     (unsigned)modbus_slave,
@@ -388,8 +363,7 @@ bool RuntimeConfig::saveToSd(const char* filename) const
   return true;
 }
 
-void RuntimeConfig::log() const
-{
+void RuntimeConfig::log() const {
   DBG.info("CFG: metric_id=%s", metric_id);
   DBG.info("CFG: complex_enabled=%d complex_id=%s", complex_enabled ? 1 : 0, complex_id);
   DBG.info("CFG: server_url=%s", server_url);
