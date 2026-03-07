@@ -1,32 +1,33 @@
 /**
- * ================================================================
- * @file app.cpp
- * @brief Реализация главного класса приложения.
- * ================================================================
- */
+* ================================================================
+* @file app.cpp
+* @brief Реализация главного класса приложения.
+* ================================================================
+*/
 #include "app.hpp"
 #include "w5500_net.hpp"
 #include "https_w5500.hpp"
 #include "runtime_config.hpp"
 #include "cfg_uart_bridge.hpp"
+#include "board_pins.hpp"
 
 #include <cctype>
-#include <cstring>
 #include <cstdio>
-#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 
 extern "C" {
-  extern I2C_HandleTypeDef  hi2c1;
-  extern UART_HandleTypeDef huart2;
-  extern UART_HandleTypeDef huart3;
-  extern SPI_HandleTypeDef  hspi1;
-  extern RTC_HandleTypeDef  hrtc;
-  extern bool g_sd_disabled;            // флаг "SD отключена" из main.cpp
+extern I2C_HandleTypeDef hi2c1;
+extern UART_HandleTypeDef huart2;
+extern UART_HandleTypeDef huart3;
+extern SPI_HandleTypeDef hspi1;
+extern RTC_HandleTypeDef hrtc;
+extern bool g_sd_disabled; // флаг "SD отключена" из main.cpp
 
-  #include "socket.h"
-  #include "dns.h"
-  #include "w5500.h"
-  #include "wizchip_conf.h"
+#include "socket.h"
+#include "dns.h"
+#include "w5500.h"
+#include "wizchip_conf.h"
 }
 
 static W5500Net eth;
@@ -61,16 +62,8 @@ static bool startsWith(const char* s, const char* prefix)
 // ============================================================================
 // ETH
 // ============================================================================
-static bool ethLinkUpAfterInit() {
-  uint8_t link = 0;
-  if (ctlwizchip(CW_GET_PHYLINK, (void*)&link) != 0) {
-    DBG.error("ETH: CW_GET_PHYLINK failed");
-    return false;
-  }
-  return (link != 0);
-}
-
-static bool ensureEthReadyAndLinkUp() {
+static bool ensureEthReadyAndLinkUp()
+{
   if (!eth.ready()) {
     DBG.info("ETH: init...");
     if (!eth.init(&hspi1, Config::W5500_DHCP_TIMEOUT_MS)) {
@@ -79,21 +72,23 @@ static bool ensureEthReadyAndLinkUp() {
     }
   }
 
-  // Ограниченный опрос PHY, чтобы не залипать
   uint8_t link = 0;
   const int maxTries = 50; // ~5 секунд при шаге 100 мс
+
   for (int i = 0; i < maxTries; ++i) {
     if (ctlwizchip(CW_GET_PHYLINK, (void*)&link) != 0) {
       DBG.error("ETH: CW_GET_PHYLINK failed");
       return false;
     }
+
     if (link != PHY_LINK_OFF) {
       DBG.info("ETH: PHY link UP (try %d)", i + 1);
       return true;
     }
+
     DBG.warn("ETH: PHY link OFF (try %d/%d)", i + 1, maxTries);
     HAL_Delay(100);
-    IWDG->KR = 0xAAAA;   // подкармливаем во время ожидания PHY
+    IWDG->KR = 0xAAAA;
   }
 
   DBG.error("ETH: no PHY link after %d tries, continue without ETH", maxTries);
@@ -148,7 +143,11 @@ static bool parseHttpUrl(const char* url, UrlParts& out)
     out.port = (uint16_t)port;
   }
 
-  if (*p == 0) { std::strcpy(out.path, "/"); return true; }
+  if (*p == 0) {
+    std::strcpy(out.path, "/");
+    return true;
+  }
+
   if (*p != '/') return false;
 
   size_t pathLen = std::strlen(p);
@@ -160,32 +159,57 @@ static bool parseHttpUrl(const char* url, UrlParts& out)
 static bool resolveHost(const char* host, uint8_t outIp[4])
 {
   if (isIpv4Literal(host)) {
-    uint32_t a=0,b=0,c=0,d=0;
-    if (std::sscanf(host, "%lu.%lu.%lu.%lu", &a,&b,&c,&d) != 4) return false;
-    if (a>255||b>255||c>255||d>255) return false;
-    outIp[0]=(uint8_t)a; outIp[1]=(uint8_t)b; outIp[2]=(uint8_t)c; outIp[3]=(uint8_t)d;
+    uint32_t a = 0, b = 0, c = 0, d = 0;
+    if (std::sscanf(host, "%lu.%lu.%lu.%lu", &a, &b, &c, &d) != 4) return false;
+    if (a > 255 || b > 255 || c > 255 || d > 255) return false;
+    outIp[0] = (uint8_t)a;
+    outIp[1] = (uint8_t)b;
+    outIp[2] = (uint8_t)c;
+    outIp[3] = (uint8_t)d;
     return true;
   }
 
   wiz_NetInfo ni{};
   wizchip_getnetinfo(&ni);
 
-  static uint8_t dnsBuf[512];
+  static uint8_t dnsBuf[Config::DNS_BUFFER_SIZE];
   DNS_init(1, dnsBuf);
 
-  uint8_t resolved[4]{};
-  int8_t r = DNS_run(ni.dns, (uint8_t*)host, resolved);
-  if (r != 1) return false;
+  DBG.info("DNS: server %u.%u.%u.%u",
+           ni.dns[0], ni.dns[1], ni.dns[2], ni.dns[3]);
+  DBG.info("DNS: run host=%s", host);
 
-  std::memcpy(outIp, resolved, 4);
-  return true;
+  uint8_t resolved[4]{};
+
+  const uint32_t t0 = HAL_GetTick();
+  while ((HAL_GetTick() - t0) < Config::DNS_TIMEOUT_MS) {
+    int8_t r = DNS_run(ni.dns, (uint8_t*)host, resolved);
+
+    if (r == 1) {
+      std::memcpy(outIp, resolved, 4);
+      DBG.info("DNS: resolved %u.%u.%u.%u",
+               outIp[0], outIp[1], outIp[2], outIp[3]);
+      return true;
+    }
+
+    if (r < 0) {
+      DBG.error("DNS: error r=%d", (int)r);
+      return false;
+    }
+
+    HAL_Delay(50);
+    IWDG->KR = 0xAAAA;
+  }
+
+  DBG.error("DNS: timeout host=%s", host);
+  return false;
 }
 
 static int httpPostPlainW5500(const char* url,
-                             const char* authBasicB64,
-                             const char* json,
-                             uint16_t len,
-                             uint32_t timeoutMs)
+                              const char* authBasicB64,
+                              const char* json,
+                              uint16_t len,
+                              uint32_t timeoutMs)
 {
   UrlParts u{};
   if (!parseHttpUrl(url, u)) return -10;
@@ -193,44 +217,51 @@ static int httpPostPlainW5500(const char* url,
   uint8_t dstIp[4]{};
   if (!resolveHost(u.host, dstIp)) return -11;
 
-  const uint8_t  sn = 0;
-  const uint16_t localPort = 50000;
+  const uint8_t sn = 0;
+  const uint16_t localPort = Config::HTTP_LOCAL_PORT;
 
   int8_t s = socket(sn, Sn_MR_TCP, localPort, 0);
-  if (s != sn) { close(sn); return -20; }
+  if (s != sn) {
+    close(sn);
+    return -20;
+  }
 
   int8_t c = connect(sn, dstIp, u.port);
-  if (c != SOCK_OK) { close(sn); return -21; }
+  if (c != SOCK_OK) {
+    close(sn);
+    return -21;
+  }
 
   char hdr[600];
   int hdrLen = 0;
 
   if (authBasicB64 && authBasicB64[0]) {
     hdrLen = std::snprintf(
-      hdr, sizeof(hdr),
-      "POST %s HTTP/1.1\r\n"
-      "Host: %s\r\n"
-      "Authorization: Basic %s\r\n"
-      "Content-Type: application/json\r\n"
-      "Content-Length: %u\r\n"
-      "Connection: close\r\n"
-      "\r\n",
-      u.path, u.host, authBasicB64, (unsigned)len
-    );
+        hdr, sizeof(hdr),
+        "POST %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Authorization: Basic %s\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %u\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        u.path, u.host, authBasicB64, (unsigned)len);
   } else {
     hdrLen = std::snprintf(
-      hdr, sizeof(hdr),
-      "POST %s HTTP/1.1\r\n"
-      "Host: %s\r\n"
-      "Content-Type: application/json\r\n"
-      "Content-Length: %u\r\n"
-      "Connection: close\r\n"
-      "\r\n",
-      u.path, u.host, (unsigned)len
-    );
+        hdr, sizeof(hdr),
+        "POST %s HTTP/1.1\r\n"
+        "Host: %s\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %u\r\n"
+        "Connection: close\r\n"
+        "\r\n",
+        u.path, u.host, (unsigned)len);
   }
 
-  if (hdrLen <= 0 || (size_t)hdrLen >= sizeof(hdr)) { close(sn); return -22; }
+  if (hdrLen <= 0 || (size_t)hdrLen >= sizeof(hdr)) {
+    close(sn);
+    return -22;
+  }
 
   auto sendAll = [&](const uint8_t* p, uint32_t n) -> int {
     uint32_t off = 0;
@@ -242,15 +273,23 @@ static int httpPostPlainW5500(const char* url,
     return 0;
   };
 
-  if (sendAll((const uint8_t*)hdr, (uint32_t)hdrLen) != 0) { close(sn); return -23; }
-  if (sendAll((const uint8_t*)json, (uint32_t)len) != 0)    { close(sn); return -24; }
+  if (sendAll((const uint8_t*)hdr, (uint32_t)hdrLen) != 0) {
+    close(sn);
+    return -23;
+  }
+  if (sendAll((const uint8_t*)json, (uint32_t)len) != 0) {
+    close(sn);
+    return -24;
+  }
 
   uint32_t t0 = HAL_GetTick();
   static char rx[768];
   int rxUsed = 0;
 
   while ((HAL_GetTick() - t0) < timeoutMs) {
-    int32_t rlen = recv(sn, (uint8_t*)rx + rxUsed, (uint16_t)(sizeof(rx) - 1 - rxUsed));
+    int32_t rlen = recv(sn,
+                        (uint8_t*)rx + rxUsed,
+                        (uint16_t)(sizeof(rx) - 1 - rxUsed));
     if (rlen > 0) {
       rxUsed += (int)rlen;
       rx[rxUsed] = 0;
@@ -267,6 +306,7 @@ static int httpPostPlainW5500(const char* url,
       }
     } else {
       HAL_Delay(2);
+      IWDG->KR = 0xAAAA;
     }
   }
 
@@ -278,7 +318,10 @@ static int httpPostPlainW5500(const char* url,
 // ============================================================================
 // Time helpers: DateTime -> unix ms (UTC, по полям DateTime)
 // ============================================================================
-static bool isLeap(int y) { return ((y % 4) == 0 && (y % 100) != 0) || ((y % 400) == 0); }
+static bool isLeap(int y)
+{
+  return ((y % 4) == 0 && (y % 100) != 0) || ((y % 400) == 0);
+}
 
 static uint32_t daysBeforeMonth(int y, int m)
 {
@@ -334,8 +377,8 @@ static constexpr uint32_t BKP_MAGIC = 0x4E545031; // "NTP1"
 static constexpr uint32_t BKP_MAGIC_REG = RTC_BKP_DR0;
 static constexpr uint32_t BKP_LASTSYNC_REG = RTC_BKP_DR1;
 
-static uint32_t bkpRead(uint32_t reg)  { return HAL_RTCEx_BKUPRead(&hrtc, reg); }
-static void     bkpWrite(uint32_t reg, uint32_t v) { HAL_RTCEx_BKUPWrite(&hrtc, reg, v); }
+static uint32_t bkpRead(uint32_t reg) { return HAL_RTCEx_BKUPRead(&hrtc, reg); }
+static void bkpWrite(uint32_t reg, uint32_t v) { HAL_RTCEx_BKUPWrite(&hrtc, reg, v); }
 
 static uint32_t loadLastSyncUnix()
 {
@@ -369,7 +412,7 @@ static void unixToDateTime(uint32_t unixSec, DateTime& out)
 
   out.seconds = (uint8_t)(sec % 60); sec /= 60;
   out.minutes = (uint8_t)(sec % 60); sec /= 60;
-  out.hours   = (uint8_t)(sec % 24); sec /= 24;
+  out.hours = (uint8_t)(sec % 24); sec /= 24;
 
   uint32_t days = sec;
   int y = 1970;
@@ -390,9 +433,9 @@ static void unixToDateTime(uint32_t unixSec, DateTime& out)
     m++;
   }
 
-  out.year  = (uint8_t)(y - 2000);
+  out.year = (uint8_t)(y - 2000);
   out.month = (uint8_t)(m + 1);
-  out.date  = (uint8_t)(days + 1);
+  out.date = (uint8_t)(days + 1);
 }
 
 static bool sntpGetUnixTime(const char* host, uint32_t& unixSec)
@@ -440,8 +483,8 @@ static bool sntpGetUnixTime(const char* host, uint32_t& unixSec)
         close(sn);
 
         uint32_t ntpSec =
-          ((uint32_t)rx[40] << 24) | ((uint32_t)rx[41] << 16) |
-          ((uint32_t)rx[42] <<  8) | ((uint32_t)rx[43] <<  0);
+            ((uint32_t)rx[40] << 24) | ((uint32_t)rx[41] << 16) |
+            ((uint32_t)rx[42] << 8) | ((uint32_t)rx[43] << 0);
 
         const uint32_t NTP_TO_UNIX = 2208988800UL;
         if (ntpSec < NTP_TO_UNIX) {
@@ -457,6 +500,7 @@ static bool sntpGetUnixTime(const char* host, uint32_t& unixSec)
       }
 
       HAL_Delay(10);
+      IWDG->KR = 0xAAAA;
     }
 
     DBG.error("NTP: timeout (attempt %d/%d)", attempt, maxAttempts);
@@ -486,12 +530,17 @@ SystemMode App::readMode()
   return (pin == GPIO_PIN_SET) ? SystemMode::Debug : SystemMode::Sleep;
 }
 
-void App::ledOn()  { HAL_GPIO_WritePin(PIN_LED_PORT, PIN_LED_PIN, GPIO_PIN_SET); }
+void App::ledOn() { HAL_GPIO_WritePin(PIN_LED_PORT, PIN_LED_PIN, GPIO_PIN_SET); }
 void App::ledOff() { HAL_GPIO_WritePin(PIN_LED_PORT, PIN_LED_PIN, GPIO_PIN_RESET); }
 
 void App::ledBlink(uint8_t count, uint32_t ms)
 {
-  for (uint8_t i = 0; i < count; i++) { ledOn(); HAL_Delay(ms); ledOff(); HAL_Delay(ms); }
+  for (uint8_t i = 0; i < count; i++) {
+    ledOn();
+    HAL_Delay(ms);
+    ledOff();
+    HAL_Delay(ms);
+  }
 }
 
 void App::init()
@@ -584,7 +633,8 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
 
   char curStr[32]{};
   cur.formatISO8601(curStr);
-  DBG.info("[%s] NTP: need sync (%s), RTC=%s lastSync=%lu", tag, reason, curStr, (unsigned long)lastSync);
+  DBG.info("[%s] NTP: need sync (%s), RTC=%s lastSync=%lu",
+           tag, reason, curStr, (unsigned long)lastSync);
 
   if (readChannel() != LinkChannel::Eth) {
     DBG.error("[%s] NTP: skip, channel is not ETH", tag);
@@ -639,10 +689,8 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
       DBG.info("========================================================================");
     }
 
-    // NTP
     (void)syncRtcWithNtpIfNeeded(tag, doSelfTest);
 
-    // ---- Modbus опрос ----
     DateTime ts{};
     float val = m_sensor.read(ts);
 
@@ -656,19 +704,17 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
 
     ledBlink(1, 50);
 
-    // ---- SD журнал ----
     if (!g_sd_disabled) {
       char line[320];
       int lenLine = std::snprintf(
-        line, sizeof(line),
-        "{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
-        "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}",
-        tsStr,
-        Cfg().metric_id,
-        val,
-        (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
-        (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
-      );
+          line, sizeof(line),
+          "{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
+          "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}",
+          tsStr,
+          Cfg().metric_id,
+          val,
+          (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
+          (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds);
 
       if (lenLine > 0 && lenLine < (int)sizeof(line)) {
         if (!m_sdBackup.appendLine(line)) DBG.error("SD: appendLine failed");
@@ -677,21 +723,19 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
       }
     }
 
-    // ---- Self-test POST on BOOT/WAKE ----
     if (doSelfTest) {
       LinkChannel ch = readChannel();
 
       char j[320];
       int len = std::snprintf(
-        j, sizeof(j),
-        "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
-        "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
-        tsStr,
-        Cfg().metric_id,
-        val,
-        (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
-        (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds
-      );
+          j, sizeof(j),
+          "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
+          "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
+          tsStr,
+          Cfg().metric_id,
+          val,
+          (unsigned)ts.year, (unsigned)ts.month, (unsigned)ts.date,
+          (unsigned)ts.hours, (unsigned)ts.minutes, (unsigned)ts.seconds);
 
       if (len > 0 && len < (int)sizeof(j)) {
         int http = -1;
@@ -703,21 +747,21 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
             if (startsWith(Cfg().server_url, "https://")) {
               DBG.data("TB payload (self-test): %s", j);
               http = HttpsW5500::postJson(
-                Cfg().server_url,
-                Cfg().server_auth_b64,
-                j,
-                (uint16_t)std::strlen(j),
-                20000
+                  Cfg().server_url,
+                  Cfg().server_auth_b64,
+                  j,
+                  (uint16_t)std::strlen(j),
+                  Config::HTTPS_POST_TIMEOUT_MS
               );
               DBG.info("[%s] ETH HTTPS POST code=%d", tag, http);
             } else if (startsWith(Cfg().server_url, "http://")) {
               DBG.data("TB payload (self-test): %s", j);
               http = httpPostPlainW5500(
-                Cfg().server_url,
-                Cfg().server_auth_b64,
-                j,
-                (uint16_t)std::strlen(j),
-                15000
+                  Cfg().server_url,
+                  Cfg().server_auth_b64,
+                  j,
+                  (uint16_t)std::strlen(j),
+                  Config::HTTP_POST_TIMEOUT_MS
               );
               DBG.info("[%s] ETH HTTP POST code=%d", tag, http);
             } else {
@@ -744,10 +788,15 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
     m_pollCounter++;
     if (m_pollCounter >= Cfg().send_interval_polls) {
       m_pollCounter = 0;
-      transmitBuffer();
+
+      if (g_sd_disabled) {
+        DBG.info("SD disabled -> direct single transmit");
+        transmitSingle(val, ts);
+      } else {
+        transmitBuffer();
+      }
     }
 
-    // ---- Сон/ожидание ----
     const uint32_t pollSec = Cfg().poll_interval_sec;
 
     if (m_mode == SystemMode::Sleep) {
@@ -763,8 +812,6 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
     }
 
     firstCycle = false;
-
-    // --- кормим watchdog в самом конце цикла ---
     IWDG->KR = 0xAAAA;
   }
 }
@@ -807,35 +854,69 @@ void App::transmitBuffer()
 
 void App::transmitSingle(float value, const DateTime& dt)
 {
-  if (readChannel() == LinkChannel::Eth) {
-    DBG.error("ETH selected -> transmitSingle via GSM запрещён, пропуск");
-    return;
-  }
-
   const uint64_t unixMs = toUnixMs(dt);
   char tsStr[24];
   u64_to_dec(tsStr, sizeof(tsStr), unixMs);
 
   char j[320];
   int len = std::snprintf(
-    j, sizeof(j),
-    "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
-    "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
-    tsStr,
-    Cfg().metric_id,
-    value,
-    (unsigned)dt.year, (unsigned)dt.month, (unsigned)dt.date,
-    (unsigned)dt.hours, (unsigned)dt.minutes, (unsigned)dt.seconds
-  );
-  if (len <= 0 || len >= (int)sizeof(j)) return;
+      j, sizeof(j),
+      "[{\"ts\":%s,\"values\":{\"metricId\":\"%s\",\"value\":%.3f,"
+      "\"measureTime\":\"20%02u-%02u-%02uT%02u:%02u:%02u.000Z\"}}]",
+      tsStr,
+      Cfg().metric_id,
+      value,
+      (unsigned)dt.year, (unsigned)dt.month, (unsigned)dt.date,
+      (unsigned)dt.hours, (unsigned)dt.minutes, (unsigned)dt.seconds);
+  if (len <= 0 || len >= (int)sizeof(j)) {
+    DBG.error("transmitSingle: JSON build failed");
+    return;
+  }
+
+  LinkChannel ch = readChannel();
+  int http = -1;
+
+  if (ch == LinkChannel::Eth) {
+    if (!ensureEthReadyAndLinkUp()) {
+      DBG.error("transmitSingle: ETH not ready/link -> skipped");
+      return;
+    }
+
+    if (startsWith(Cfg().server_url, "https://")) {
+      DBG.data("TB payload (single ETH): %s", j);
+      http = HttpsW5500::postJson(
+          Cfg().server_url,
+          Cfg().server_auth_b64,
+          j,
+          (uint16_t)len,
+          Config::HTTPS_POST_TIMEOUT_MS
+      );
+      DBG.info("transmitSingle: ETH HTTPS code=%d", http);
+    } else if (startsWith(Cfg().server_url, "http://")) {
+      DBG.data("TB payload (single ETH): %s", j);
+      http = httpPostPlainW5500(
+          Cfg().server_url,
+          Cfg().server_auth_b64,
+          j,
+          (uint16_t)len,
+          Config::HTTP_POST_TIMEOUT_MS
+      );
+      DBG.info("transmitSingle: ETH HTTP code=%d", http);
+    } else {
+      DBG.error("transmitSingle: unsupported SERVER_URL scheme");
+      return;
+    }
+
+    return;
+  }
 
   m_gsm.powerOn();
   if (m_gsm.init() == GsmStatus::Ok) {
-    auto s = m_gsm.httpPost(Cfg().server_url, j, (uint16_t)len);
-    DBG.info("DEBUG HTTP: %d", (int)s);
+    http = m_gsm.httpPost(Cfg().server_url, j, (uint16_t)len);
+    DBG.info("transmitSingle: GSM code=%d", http);
     m_gsm.disconnect();
   } else {
-    DBG.error("GSM init fail (DEBUG)");
+    DBG.error("transmitSingle: GSM init fail");
   }
   m_gsm.powerOff();
 }
@@ -854,7 +935,7 @@ void App::retransmitBackup()
     FSIZE_t used = 0;
 
     const uint32_t maxPayload =
-      (Config::HTTP_CHUNK_MAX < Config::JSON_BUFFER_SIZE)
+        (Config::HTTP_CHUNK_MAX < Config::JSON_BUFFER_SIZE)
         ? Config::HTTP_CHUNK_MAX
         : (Config::JSON_BUFFER_SIZE - 1);
 
@@ -881,20 +962,20 @@ void App::retransmitBackup()
 
       if (startsWith(Cfg().server_url, "https://")) {
         http = HttpsW5500::postJson(
-          Cfg().server_url,
-          Cfg().server_auth_b64,
-          m_json,
-          (uint16_t)std::strlen(m_json),
-          20000
+            Cfg().server_url,
+            Cfg().server_auth_b64,
+            m_json,
+            (uint16_t)std::strlen(m_json),
+            Config::HTTPS_POST_TIMEOUT_MS
         );
         DBG.info("ETH HTTPS: %d", http);
       } else if (startsWith(Cfg().server_url, "http://")) {
         http = httpPostPlainW5500(
-          Cfg().server_url,
-          Cfg().server_auth_b64,
-          m_json,
-          (uint16_t)std::strlen(m_json),
-          15000
+            Cfg().server_url,
+            Cfg().server_auth_b64,
+            m_json,
+            (uint16_t)std::strlen(m_json),
+            Config::HTTP_POST_TIMEOUT_MS
         );
         DBG.info("ETH HTTP: %d", http);
       } else {

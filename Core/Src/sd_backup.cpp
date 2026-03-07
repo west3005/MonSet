@@ -1,33 +1,33 @@
 #include "sd_backup.hpp"
 #include "debug_uart.hpp"
 
-#include <cstdio>
 #include <cstring>
+#include <cstdio>
 
 static const char* frStr(FRESULT fr)
 {
   switch (fr) {
-    case FR_OK:             return "FR_OK";
-    case FR_DISK_ERR:       return "FR_DISK_ERR";
-    case FR_INT_ERR:        return "FR_INT_ERR";
-    case FR_NOT_READY:      return "FR_NOT_READY";
-    case FR_NO_FILE:        return "FR_NO_FILE";
-    case FR_NO_PATH:        return "FR_NO_PATH";
-    case FR_INVALID_NAME:   return "FR_INVALID_NAME";
-    case FR_DENIED:         return "FR_DENIED";
-    case FR_EXIST:          return "FR_EXIST";
-    case FR_INVALID_OBJECT: return "FR_INVALID_OBJECT";
-    case FR_WRITE_PROTECTED:return "FR_WRITE_PROTECTED";
-    case FR_INVALID_DRIVE:  return "FR_INVALID_DRIVE";
-    case FR_NOT_ENABLED:    return "FR_NOT_ENABLED";
-    case FR_NO_FILESYSTEM:  return "FR_NO_FILESYSTEM";
-    case FR_MKFS_ABORTED:   return "FR_MKFS_ABORTED";
-    case FR_TIMEOUT:        return "FR_TIMEOUT";
-    case FR_LOCKED:         return "FR_LOCKED";
-    case FR_NOT_ENOUGH_CORE:return "FR_NOT_ENOUGH_CORE";
+    case FR_OK:                  return "FR_OK";
+    case FR_DISK_ERR:            return "FR_DISK_ERR";
+    case FR_INT_ERR:             return "FR_INT_ERR";
+    case FR_NOT_READY:           return "FR_NOT_READY";
+    case FR_NO_FILE:             return "FR_NO_FILE";
+    case FR_NO_PATH:             return "FR_NO_PATH";
+    case FR_INVALID_NAME:        return "FR_INVALID_NAME";
+    case FR_DENIED:              return "FR_DENIED";
+    case FR_EXIST:               return "FR_EXIST";
+    case FR_INVALID_OBJECT:      return "FR_INVALID_OBJECT";
+    case FR_WRITE_PROTECTED:     return "FR_WRITE_PROTECTED";
+    case FR_INVALID_DRIVE:       return "FR_INVALID_DRIVE";
+    case FR_NOT_ENABLED:         return "FR_NOT_ENABLED";
+    case FR_NO_FILESYSTEM:       return "FR_NO_FILESYSTEM";
+    case FR_MKFS_ABORTED:        return "FR_MKFS_ABORTED";
+    case FR_TIMEOUT:             return "FR_TIMEOUT";
+    case FR_LOCKED:              return "FR_LOCKED";
+    case FR_NOT_ENOUGH_CORE:     return "FR_NOT_ENOUGH_CORE";
     case FR_TOO_MANY_OPEN_FILES: return "FR_TOO_MANY_OPEN_FILES";
     case FR_INVALID_PARAMETER:   return "FR_INVALID_PARAMETER";
-    default:                return "FR_???";
+    default:                     return "FR_???";
   }
 }
 
@@ -46,22 +46,6 @@ void SdBackup::make_full_path(char* out, size_t out_sz, const char* fname) const
   std::snprintf(out, out_sz, "%s/%s", drive, fname); // "0:/backup.json"
 }
 
-/*bool SdBackup::init() {
-  char drive[3];
-  make_drive(drive, sizeof(drive));
-
-  FRESULT fr = f_mount(&m_fatfs, drive, 1);
-  if (fr != FR_OK) {
-    DBG.error("SD: mount fail drive=%s (FR=%d %s)", drive, (int)fr, frStr(fr));
-    m_mounted = false;
-    // Не считаем это фатальной ошибкой: просто работаем без SD
-    return false;
-  }
-
-  m_mounted = true;
-  DBG.info("SD: mounted drive=%s", drive);
-  return true;
-}*/
 bool SdBackup::init() {
   // Если уже признали SD “сломанной” — даже не пытаемся
   if (m_broken) {
@@ -73,7 +57,7 @@ bool SdBackup::init() {
   char drive[3];
   make_drive(drive, sizeof(drive));
 
-  const uint32_t t0 = HAL_GetTick();
+  const uint32_t t0        = HAL_GetTick();
   const uint32_t timeoutMs = 5000;
 
   FRESULT fr = FR_INT_ERR;
@@ -87,7 +71,7 @@ bool SdBackup::init() {
   if (fr != FR_OK) {
     DBG.error("SD: mount timeout, last FR=%d %s", (int)fr, frStr(fr));
     m_mounted = false;
-    m_broken = true;  // помечаем SD как нерабочую на весь срок работы
+    m_broken  = true; // помечаем SD как нерабочую на весь срок работы
     return false;
   }
 
@@ -135,6 +119,54 @@ bool SdBackup::remove()
   return true;
 }
 
+// ------------------------ свободное место + ротация ------------------------
+
+DWORD SdBackup::getFreeSpaceBytes() const
+{
+  char drive[3];
+  make_drive(drive, sizeof(drive));
+
+  FATFS* fs = nullptr;
+  DWORD  fre_clust = 0;
+  FRESULT fr = f_getfree(drive, &fre_clust, &fs);
+  if (fr != FR_OK || fs == nullptr) {
+    DBG.error("SD: f_getfree fail (FR=%d %s)", (int)fr, frStr(fr));
+    return 0;
+  }
+
+  // Размер кластера в секторах * 512
+  DWORD bytes = fre_clust * fs->csize * 512UL;
+  return bytes;
+}
+
+bool SdBackup::checkAndRotateFile(FIL& f, const char* path)
+{
+  // Текущий размер файла
+  FSIZE_t sz = f_size(&f);
+
+  if (sz < MAX_BACKUP_FILE_SIZE) {
+    // Пока в лимите — ничего не делаем
+    return true;
+  }
+
+  // Если файл сильно разросся — удаляем его и создаём заново (самый простой ring-buffer).
+  DBG.warn("SD: backup file too big (%lu bytes) -> rotate (truncate)",
+           (unsigned long)sz);
+
+  f_close(&f);
+
+  // Просто пересоздаём файл, теряя старый журнал
+  FRESULT fr = f_open(&f, path, FA_CREATE_ALWAYS | FA_WRITE);
+  if (fr != FR_OK) {
+    DBG.error("SD: rotate reopen fail path=%s (FR=%d %s)", path, (int)fr, frStr(fr));
+    return false;
+  }
+
+  return true;
+}
+
+// ------------------------------ appendLine ----------------------------------
+
 bool SdBackup::appendLine(const char* jsonLine)
 {
   if (!m_mounted || !jsonLine) return false;
@@ -153,6 +185,16 @@ bool SdBackup::appendLine(const char* jsonLine)
     }
   }
 
+  // Проверка свободного места — не пишем, если карта заполнена
+  // Оценка: размер строки + EOL + небольшой запас
+  const DWORD freeBytes = getFreeSpaceBytes();
+  const DWORD needBytes = (DWORD)n + 4U;
+  if (freeBytes != 0 && freeBytes < needBytes) {
+    DBG.error("SD: not enough free space (have=%lu need=%lu), skip line",
+              (unsigned long)freeBytes, (unsigned long)needBytes);
+    return false;
+  }
+
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
 
@@ -163,6 +205,13 @@ bool SdBackup::appendLine(const char* jsonLine)
     return false;
   }
 
+  // Лимит размера файла + простая ротация (truncate)
+  if (!checkAndRotateFile(f, path)) {
+    f_close(&f);
+    return false;
+  }
+
+  // Пишем в конец
   fr = f_lseek(&f, f_size(&f));
   if (fr != FR_OK) {
     DBG.error("SD: lseek(end) fail path=%s (FR=%d %s)", path, (int)fr, frStr(fr));
@@ -200,13 +249,15 @@ bool SdBackup::appendLine(const char* jsonLine)
   return true;
 }
 
+// ------------------------ readChunkAsJsonArray ------------------------------
+
 bool SdBackup::readChunkAsJsonArray(char* out,
-                                   uint32_t outSize,
-                                   uint32_t maxPayloadBytes,
-                                   uint32_t& linesRead,
-                                   FSIZE_t& bytesUsedFromFile)
+                                    uint32_t outSize,
+                                    uint32_t maxPayloadBytes,
+                                    uint32_t& linesRead,
+                                    FSIZE_t& bytesUsedFromFile)
 {
-  linesRead = 0;
+  linesRead         = 0;
   bytesUsedFromFile = 0;
 
   if (!m_mounted || !out || outSize < 4) return false;
@@ -227,7 +278,7 @@ bool SdBackup::readChunkAsJsonArray(char* out,
   uint32_t off = 0;
   out[off++] = '[';
 
-  char line[Config::JSONL_LINE_MAX + 4];
+  char   line[Config::JSONL_LINE_MAX + 4];
   FSIZE_t lastPosAfterLine = 0;
 
   while (true) {
@@ -237,7 +288,9 @@ bool SdBackup::readChunkAsJsonArray(char* out,
     lastPosAfterLine = f_tell(&f);
 
     size_t n = std::strlen(line);
-    while (n > 0 && (line[n - 1] == '\r' || line[n - 1] == '\n' || line[n - 1] == ' ' || line[n - 1] == '\t')) {
+    while (n > 0 &&
+           (line[n - 1] == '\r' || line[n - 1] == '\n' ||
+            line[n - 1] == ' '  || line[n - 1] == '\t')) {
       line[--n] = '\0';
     }
 
@@ -248,7 +301,7 @@ bool SdBackup::readChunkAsJsonArray(char* out,
 
     uint32_t need = (linesRead ? 1u : 0u) + (uint32_t)n + 1u + 1u; // comma + line + ']' + '\0'
     if (off + need > maxPayloadBytes) break;
-    if (off + need > outSize) break;
+    if (off + need > outSize)        break;
 
     if (linesRead) out[off++] = ',';
     std::memcpy(&out[off], line, n);
@@ -259,7 +312,7 @@ bool SdBackup::readChunkAsJsonArray(char* out,
   }
 
   out[off++] = ']';
-  out[off] = '\0';
+  out[off]   = '\0';
 
   f_close(&f);
 
@@ -271,6 +324,8 @@ bool SdBackup::readChunkAsJsonArray(char* out,
 
   return true;
 }
+
+// ------------------------------- consumePrefix ------------------------------
 
 bool SdBackup::consumePrefix(FSIZE_t bytesUsedFromFile)
 {
@@ -311,7 +366,8 @@ bool SdBackup::consumePrefix(FSIZE_t bytesUsedFromFile)
 
   fr = f_lseek(&src, bytesUsedFromFile);
   if (fr != FR_OK) {
-    DBG.error("SD: consume lseek src fail used=%lu (FR=%d %s)", (unsigned long)bytesUsedFromFile, (int)fr, frStr(fr));
+    DBG.error("SD: consume lseek src fail used=%lu (FR=%d %s)",
+              (unsigned long)bytesUsedFromFile, (int)fr, frStr(fr));
     f_close(&src);
     f_close(&dst);
     f_unlink(tmpPath);
@@ -319,7 +375,7 @@ bool SdBackup::consumePrefix(FSIZE_t bytesUsedFromFile)
   }
 
   uint8_t buf[512];
-  UINT br = 0, bw = 0;
+  UINT    br = 0, bw = 0;
 
   while (true) {
     fr = f_read(&src, buf, sizeof(buf), &br);
@@ -331,7 +387,8 @@ bool SdBackup::consumePrefix(FSIZE_t bytesUsedFromFile)
 
     fr = f_write(&dst, buf, br, &bw);
     if (fr != FR_OK || bw != br) {
-      DBG.error("SD: consume write fail (FR=%d %s bw=%u/%u)", (int)fr, frStr(fr), (unsigned)bw, (unsigned)br);
+      DBG.error("SD: consume write fail (FR=%d %s bw=%u/%u)",
+                (int)fr, frStr(fr), (unsigned)bw, (unsigned)br);
       fr = FR_DISK_ERR;
       break;
     }

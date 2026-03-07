@@ -2,10 +2,12 @@
 ../Core/Src/sd_backup.cpp:34:6:void SdBackup::make_drive(char*, size_t) const	0	static
 ../Core/Src/sd_backup.cpp:34:6:void SdBackup::make_drive(char*, size_t) const	0	static
 ../Core/Src/sd_backup.cpp:42:6:void SdBackup::make_full_path(char*, size_t, const char*) const	24	static
-../Core/Src/sd_backup.cpp:65:6:bool SdBackup::init()	40	static
-../Core/Src/sd_backup.cpp:99:6:void SdBackup::deinit()	16	static
-../Core/Src/sd_backup.cpp:111:6:bool SdBackup::exists() const	96	static
-../Core/Src/sd_backup.cpp:123:6:bool SdBackup::remove()	80	static
-../Core/Src/sd_backup.cpp:138:6:bool SdBackup::appendLine(const char*)	688	static
-../Core/Src/sd_backup.cpp:203:6:bool SdBackup::readChunkAsJsonArray(char*, uint32_t, uint32_t, uint32_t&, FSIZE_t&)	928	static
-../Core/Src/sd_backup.cpp:275:6:bool SdBackup::consumePrefix(FSIZE_t)	1800	static
+../Core/Src/sd_backup.cpp:49:6:bool SdBackup::init()	40	static
+../Core/Src/sd_backup.cpp:83:6:void SdBackup::deinit()	16	static
+../Core/Src/sd_backup.cpp:95:6:bool SdBackup::exists() const	96	static
+../Core/Src/sd_backup.cpp:107:6:bool SdBackup::remove()	80	static
+../Core/Src/sd_backup.cpp:124:7:DWORD SdBackup::getFreeSpaceBytes() const	24	static
+../Core/Src/sd_backup.cpp:142:6:bool SdBackup::checkAndRotateFile(FIL&, const char*)	24	static
+../Core/Src/sd_backup.cpp:170:6:bool SdBackup::appendLine(const char*)	680	static
+../Core/Src/sd_backup.cpp:254:6:bool SdBackup::readChunkAsJsonArray(char*, uint32_t, uint32_t, uint32_t&, FSIZE_t&)	928	static
+../Core/Src/sd_backup.cpp:330:6:bool SdBackup::consumePrefix(FSIZE_t)	1800	static
