@@ -86,19 +86,19 @@ DSTATUS SD_initialize(BYTE lun)
     (void)lun;
     Stat = STA_NOINIT;
 
-    printf("[DISKIO] init: begin\r\n");
+    printf("[DISKIO] newinit: begin\r\n");
 
 #if !defined(DISABLE_SD_INIT)
     if (BSP_SD_Init() == MSD_OK) {
         Stat = SD_CheckStatus(lun);
     } else {
-        printf("[DISKIO] init: BSP_SD_Init failed\r\n");
+        printf("[DISKIO] newinit: BSP_SD_Init failed\r\n");
     }
 #else
     Stat = SD_CheckStatus(lun);
 #endif
 
-    printf("[DISKIO] init: final Stat=0x%02X\r\n", Stat);
+    printf("[DISKIO] newinit: final Stat=0x%02X\r\n", Stat);
     return Stat;
 }
 
