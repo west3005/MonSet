@@ -57,6 +57,8 @@ extern "C" int main(void)
 {
     HAL_Init();
     SystemClock_Config();
+
+    /* Только читаем флаги reset, без DBG внутри */
     CheckResetReason();
 
     MX_GPIO_Init();
@@ -66,6 +68,10 @@ extern "C" int main(void)
     DBG.setMirror(&huart6);
     DBG.init();
     DBG.info("HAL + Clock + GPIO + UART1/6 : OK");
+
+    if (g_sd_disabled) {
+        DBG.warn("Reset by watchdog -> SD disabled for this run");
+    }
 
     MX_I2C1_Init();
     DBG.info("I2C1 (DS3231) : OK");
@@ -107,10 +113,9 @@ extern "C" int main(void)
     DBG.info("Вся периферия инициализирована. Запуск приложения...");
     DBG.separator();
 
-    /* FIX: локальный App после полной инициализации HAL/периферии */
     App app;
     app.init();
-    app.run(); // [[noreturn]]
+    app.run();
 
     return 0;
 }
@@ -159,17 +164,11 @@ extern "C" void SystemClock_Config(void)
  * ============================================================= */
 static void CheckResetReason(void)
 {
-    uint32_t flags    = RCC->CSR;
-    bool iwdg_rst     = (flags & RCC_CSR_IWDGRSTF) != 0;
-    bool wwdg_rst     = (flags & RCC_CSR_WWDGRSTF) != 0;
+    uint32_t flags = RCC->CSR;
+    bool iwdg_rst = (flags & RCC_CSR_IWDGRSTF) != 0;
+    bool wwdg_rst = (flags & RCC_CSR_WWDGRSTF) != 0;
 
-    if (iwdg_rst || wwdg_rst) {
-        DBG.warn("Reset by watchdog (IWDG=%d, WWDG=%d) -> disable SD",
-                 iwdg_rst ? 1 : 0, wwdg_rst ? 1 : 0);
-        g_sd_disabled = true;
-    } else {
-        g_sd_disabled = false;
-    }
+    g_sd_disabled = (iwdg_rst || wwdg_rst);
 
     __HAL_RCC_CLEAR_RESET_FLAGS();
 }
