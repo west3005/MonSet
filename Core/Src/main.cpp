@@ -58,59 +58,65 @@ extern "C" int main(void)
     HAL_Init();
     SystemClock_Config();
 
-    /* Только читаем флаги reset, без DBG внутри */
-    CheckResetReason();
-
     MX_GPIO_Init();
     MX_USART1_UART_Init();
     MX_USART6_UART_Init();
 
+    {
+        const char boot1[] = "BOOT1 USART1 115200\r\n";
+        HAL_UART_Transmit(&huart1, (uint8_t*)boot1, sizeof(boot1) - 1, 1000);
+        HAL_UART_Transmit(&huart6, (uint8_t*)boot1, sizeof(boot1) - 1, 1000);
+    }
+
+    CheckResetReason();
+
     DBG.setMirror(&huart6);
     DBG.init();
-    DBG.info("HAL + Clock + GPIO + UART1/6 : OK");
+    DBG.info("BOOT OK");
 
     if (g_sd_disabled) {
         DBG.warn("Reset by watchdog -> SD disabled for this run");
     }
 
+    DBG.info("HAL + Clock + GPIO + UART1/6 : OK");
+
     MX_I2C1_Init();
-    DBG.info("I2C1 (DS3231) : OK");
+    DBG.info("I2C1 OK");
 
     MX_USART2_UART_Init();
-    DBG.info("UART2 (SIM800L) : OK");
+    DBG.info("UART2 OK");
 
     MX_USART3_UART_Init();
-    DBG.info("UART3 (RS-485 Modbus) : OK");
+    DBG.info("UART3 OK");
 
     MX_RNG_Init();
-    DBG.info("RNG : OK");
+    DBG.info("RNG OK");
 
-    /* Watchdog включаем ДО потенциально зависающих вещей (SDIO/FATFS) */
     MX_IWDG_Init();
-    DBG.info("IWDG : OK");
+    DBG.info("IWDG OK");
 
     MX_SPI1_Init();
-    DBG.info("SPI1 (W5500) : OK");
+    DBG.info("SPI1 OK");
 
     if (!g_sd_disabled) {
-        DBG.info("MARK: before SDIO");
+        DBG.info("MARK before SDIO");
         MX_SDIO_SD_Init();
-        DBG.info("SDIO (SD Card) init done (may be no card)");
-        DBG.info("MARK: before FATFS");
+        DBG.info("SDIO init done");
+        DBG.info("MARK before FATFS");
         MX_FATFS_Init();
-        DBG.info("FatFs : OK");
+        DBG.info("FATFS OK");
     } else {
-        DBG.warn("SD: disabled for this run (prev reset by watchdog)");
+        DBG.warn("SD disabled for this run");
     }
 
     MX_RTC_Init();
-    DBG.info("RTC (WakeUp Timer) : OK");
+    DBG.info("RTC OK");
 
     MX_TIM6_Init();
-    DBG.info("TIM6 (Modbus timeout) : OK");
+    DBG.info("TIM6 OK");
 
     DBG.separator();
-    DBG.info("Вся периферия инициализирована. Запуск приложения...");
+    DBG.info("APP START");
     DBG.separator();
 
     App app;
@@ -120,48 +126,6 @@ extern "C" int main(void)
     return 0;
 }
 
-/* =============================================================
- * SystemClock_Config — HSE 8 MHz -> PLL -> 168 MHz
- * ============================================================= */
-extern "C" void SystemClock_Config(void)
-{
-    RCC_OscInitTypeDef osc = {};
-    RCC_ClkInitTypeDef clk = {};
-
-    __HAL_RCC_PWR_CLK_ENABLE();
-    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
-
-    osc.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSE;
-    osc.HSEState       = RCC_HSE_ON;
-    osc.LSEState       = RCC_LSE_ON;
-    osc.PLL.PLLState   = RCC_PLL_ON;
-    osc.PLL.PLLSource  = RCC_PLLSOURCE_HSE;
-    osc.PLL.PLLM       = 4;
-    osc.PLL.PLLN       = 168;
-    osc.PLL.PLLP       = RCC_PLLP_DIV2;
-    osc.PLL.PLLQ       = 7;
-
-    if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
-        Error_Handler();
-    }
-
-    clk.ClockType      = RCC_CLOCKTYPE_HCLK  |
-                         RCC_CLOCKTYPE_SYSCLK|
-                         RCC_CLOCKTYPE_PCLK1 |
-                         RCC_CLOCKTYPE_PCLK2;
-    clk.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
-    clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;
-    clk.APB1CLKDivider = RCC_HCLK_DIV4;
-    clk.APB2CLKDivider = RCC_HCLK_DIV2;
-
-    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_5) != HAL_OK) {
-        Error_Handler();
-    }
-}
-
-/* =============================================================
- * Watchdog: причина сброса + инициализация IWDG
- * ============================================================= */
 static void CheckResetReason(void)
 {
     uint32_t flags = RCC->CSR;
@@ -172,6 +136,60 @@ static void CheckResetReason(void)
 
     __HAL_RCC_CLEAR_RESET_FLAGS();
 }
+/* =============================================================
+ * SystemClock_Config — HSE 8 MHz -> PLL -> 168 MHz
+ * ============================================================= */
+extern "C" void SystemClock_Config(void)
+{
+    RCC_OscInitTypeDef osc = {};
+    RCC_ClkInitTypeDef clk = {};
+    RCC_PeriphCLKInitTypeDef periph = {};
+
+    __HAL_RCC_PWR_CLK_ENABLE();
+    __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
+    osc.OscillatorType = RCC_OSCILLATORTYPE_HSE | RCC_OSCILLATORTYPE_LSE;
+    osc.HSEState       = RCC_HSE_ON;
+    osc.LSEState       = RCC_LSE_ON;
+    osc.PLL.PLLState   = RCC_PLL_ON;
+    osc.PLL.PLLSource  = RCC_PLLSOURCE_HSE;
+    osc.PLL.PLLM       = 8;
+    osc.PLL.PLLN       = 336;
+    osc.PLL.PLLP       = RCC_PLLP_DIV2;
+    osc.PLL.PLLQ       = 8;
+
+    if (HAL_RCC_OscConfig(&osc) != HAL_OK) {
+        Error_Handler();
+    }
+
+    clk.ClockType      = RCC_CLOCKTYPE_HCLK |
+                         RCC_CLOCKTYPE_SYSCLK |
+                         RCC_CLOCKTYPE_PCLK1 |
+                         RCC_CLOCKTYPE_PCLK2;
+    clk.SYSCLKSource   = RCC_SYSCLKSOURCE_PLLCLK;
+    clk.AHBCLKDivider  = RCC_SYSCLK_DIV1;
+    clk.APB1CLKDivider = RCC_HCLK_DIV4;
+    clk.APB2CLKDivider = RCC_HCLK_DIV2;
+
+    if (HAL_RCC_ClockConfig(&clk, FLASH_LATENCY_5) != HAL_OK) {
+        Error_Handler();
+    }
+
+    periph.PeriphClockSelection = RCC_PERIPHCLK_RTC;
+    periph.RTCClockSelection    = RCC_RTCCLKSOURCE_LSE;
+
+    if (HAL_RCCEx_PeriphCLKConfig(&periph) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+
+
+
+/* =============================================================
+ * Watchdog: причина сброса + инициализация IWDG
+ * ============================================================= */
+
 
 static void MX_IWDG_Init(void)
 {
@@ -411,11 +429,12 @@ extern "C" void MX_TIM6_Init(void)
  * ============================================================= */
 extern "C" void Error_Handler(void)
 {
-    const char msg[] = "\r\n!!! FATAL ERROR - Error_Handler() !!!\r\n";
-    HAL_UART_Transmit(&huart1,
-                      reinterpret_cast<const uint8_t*>(msg),
-                      sizeof(msg) - 1,
-                      500);
+    const char msg[] = "\r\nFATAL ERROR\r\n";
+
+    /* Пытаемся вывести хотя бы в USART1/USART6 */
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, sizeof(msg) - 1, 200);
+    HAL_UART_Transmit(&huart6, (uint8_t*)msg, sizeof(msg) - 1, 200);
+
     HAL_Delay(100);
     NVIC_SystemReset();
 }
