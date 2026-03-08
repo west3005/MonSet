@@ -1,3 +1,0 @@
-../Core/Src/sensor_reader.cpp:4:1:SensorReader::SensorReader(ModbusRTU&, DS3231&)	0	static
-../Core/Src/sensor_reader.cpp:9:7:static float SensorReader::convert(uint16_t, uint16_t)	16	static
-../Core/Src/sensor_reader.cpp:16:7:float SensorReader::read(DateTime&)	48	static

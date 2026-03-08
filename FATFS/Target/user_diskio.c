@@ -1,17 +1,22 @@
 /**
- * @file    user_diskio.c
- * @brief   FatFS diskio через HAL_SD (polling mode).
- *          Надёжный вариант без DMA для устранения зависания на первом чтении.
+ * @file user_diskio.c
+ * @brief FatFS diskio через HAL_SD (polling mode).
+ *
+ * ИСПРАВЛЕНИЯ:
+ *  1. USER_initialize — убран повторный HAL_SD_Init (уже вызван в MX_SDIO_SD_Init)
+ *  2. USER_write — отключение прерываний на время записи (__disable_irq)
+ *  3. sdio.c HAL_SD_MspInit — убран HAL_NVIC_EnableIRQ(SDIO_IRQn)
  */
 
-#include <string.h>
-#include <stdio.h>
 #include <stdarg.h>
+#include <stdio.h>
+#include <string.h>
+
 #include "ff_gen_drv.h"
 #include "stm32f4xx_hal_sd.h"
 #include "stm32f4xx_hal_uart.h"
 
-extern SD_HandleTypeDef   hsd;
+extern SD_HandleTypeDef  hsd;
 extern UART_HandleTypeDef huart1;
 
 #define SD_TIMEOUT_MS  5000U
@@ -19,7 +24,7 @@ extern UART_HandleTypeDef huart1;
 static volatile DSTATUS Stat = STA_NOINIT;
 
 /* -------------------------------------------------------
- *  C-логгер
+ * C-логгер
  * ------------------------------------------------------- */
 static void diskio_log(const char *fmt, ...)
 {
@@ -57,7 +62,7 @@ Diskio_drvTypeDef USER_Driver = {
 };
 
 /* =============================================================
- *  sd_wait_ready — ждём TRANSFER state
+ * sd_wait_ready — ждём TRANSFER state
  * ============================================================= */
 static uint8_t sd_wait_ready(void)
 {
@@ -73,11 +78,13 @@ static uint8_t sd_wait_ready(void)
 }
 
 /* =============================================================
- *  USER_initialize
+ * USER_initialize
+ * FIX #1: убран HAL_SD_Init — SD уже инициализирована в MX_SDIO_SD_Init().
+ *         Повторный вызов посылал CMD0 (GO_IDLE) на уже активную карту,
+ *         оставляя hsd в нестабильном промежуточном состоянии.
  * ============================================================= */
 DSTATUS USER_initialize(BYTE pdrv)
 {
-    HAL_SD_CardStateTypeDef state;
     HAL_SD_CardInfoTypeDef info;
 
     if (pdrv != 0) {
@@ -86,34 +93,21 @@ DSTATUS USER_initialize(BYTE pdrv)
     }
 
     Stat = STA_NOINIT;
-
     diskio_log("[DISKIO] init: begin\r\n");
 
-    if (HAL_SD_Init(&hsd) != HAL_OK) {
-        diskio_log("[DISKIO] init: HAL_SD_Init failed err=0x%08lX state=%lu\r\n",
-                   HAL_SD_GetError(&hsd),
-                   (unsigned long)hsd.State);
-        return Stat;
-    }
-
-    state = HAL_SD_GetCardState(&hsd);
-    diskio_log("[DISKIO] init: after HAL_SD_Init cardState=%d\r\n", (int)state);
-
+    /* Ждём, пока карта окажется в TRANSFER (она уже инициализирована) */
     if (!sd_wait_ready()) {
-        diskio_log("[DISKIO] init: card not ready after init\r\n");
+        diskio_log("[DISKIO] init: card not ready\r\n");
         return Stat;
     }
 
-    state = HAL_SD_GetCardState(&hsd);
+    HAL_SD_CardStateTypeDef state = HAL_SD_GetCardState(&hsd);
     diskio_log("[DISKIO] init: ready cardState=%d\r\n", (int)state);
 
     if (HAL_SD_GetCardInfo(&hsd, &info) == HAL_OK) {
         diskio_log("[DISKIO] init: blocks=%lu blockSize=%lu\r\n",
                    (unsigned long)info.LogBlockNbr,
                    (unsigned long)info.LogBlockSize);
-    } else {
-        diskio_log("[DISKIO] init: HAL_SD_GetCardInfo failed err=0x%08lX\r\n",
-                   HAL_SD_GetError(&hsd));
     }
 
     Stat = 0;
@@ -122,42 +116,39 @@ DSTATUS USER_initialize(BYTE pdrv)
 }
 
 /* =============================================================
- *  USER_status
+ * USER_status
  * ============================================================= */
 DSTATUS USER_status(BYTE pdrv)
 {
     if (pdrv != 0) {
         return STA_NOINIT;
     }
-
     Stat = (HAL_SD_GetCardState(&hsd) == HAL_SD_CARD_TRANSFER) ? 0 : STA_NOINIT;
     return Stat;
 }
 
 /* =============================================================
- *  USER_read — polling-чтение без DMA
+ * USER_read — polling-чтение
  * ============================================================= */
 DRESULT USER_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 {
-    HAL_StatusTypeDef hs;
-
     diskio_log("[DISKIO] read: sec=%lu cnt=%u\r\n",
                (unsigned long)sector, (unsigned)count);
 
     if (pdrv != 0 || buff == NULL || count == 0) {
         return RES_PARERR;
     }
-
     if (USER_status(pdrv) & STA_NOINIT) {
         diskio_log("[DISKIO] read: not ready\r\n");
         return RES_NOTRDY;
     }
-
     if (!sd_wait_ready()) {
         return RES_ERROR;
     }
 
-    hs = HAL_SD_ReadBlocks(&hsd, buff, (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
+    HAL_StatusTypeDef hs = HAL_SD_ReadBlocks(
+        &hsd, buff, (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
+
     if (hs != HAL_OK) {
         diskio_log("[DISKIO] read poll err=0x%08lX hs=%d\r\n",
                    HAL_SD_GetError(&hsd), (int)hs);
@@ -174,30 +165,37 @@ DRESULT USER_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 }
 
 /* =============================================================
- *  USER_write — polling-запись без DMA
+ * USER_write — polling-запись
+ *
+ * FIX #2: __disable_irq() перед HAL_SD_WriteBlocks.
+ *   HAL_SD_WriteBlocks кормит TX FIFO в цикле опроса флага TXFIFOHE.
+ *   Любой ISR (UART1, UART3/Modbus, TIM6) опустошает FIFO → underrun →
+ *   карта получает мусор → HAL_SD_ERROR_DATA_CRC_FAIL (0x00000002).
+ *   Отключение прерываний на ~5 мс записи устраняет race condition.
  * ============================================================= */
 #if _USE_WRITE == 1
 DRESULT USER_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
 {
-    HAL_StatusTypeDef hs;
-
     diskio_log("[DISKIO] write: sec=%lu cnt=%u\r\n",
                (unsigned long)sector, (unsigned)count);
 
     if (pdrv != 0 || buff == NULL || count == 0) {
         return RES_PARERR;
     }
-
     if (USER_status(pdrv) & STA_NOINIT) {
         diskio_log("[DISKIO] write: not ready\r\n");
         return RES_NOTRDY;
     }
-
     if (!sd_wait_ready()) {
         return RES_ERROR;
     }
 
-    hs = HAL_SD_WriteBlocks(&hsd, (uint8_t*)buff, (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
+    /* FIX #2: запрещаем прерывания на время записи в FIFO */
+    __disable_irq();
+    HAL_StatusTypeDef hs = HAL_SD_WriteBlocks(
+        &hsd, (uint8_t*)buff, (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
+    __enable_irq();
+
     if (hs != HAL_OK) {
         diskio_log("[DISKIO] write poll err=0x%08lX hs=%d\r\n",
                    HAL_SD_GetError(&hsd), (int)hs);
@@ -215,7 +213,7 @@ DRESULT USER_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
 #endif /* _USE_WRITE == 1 */
 
 /* =============================================================
- *  USER_ioctl
+ * USER_ioctl
  * ============================================================= */
 #if _USE_IOCTL == 1
 DRESULT USER_ioctl(BYTE pdrv, BYTE cmd, void *buff)

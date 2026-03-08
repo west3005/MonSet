@@ -1,8 +1,8 @@
-../FATFS/Target/user_diskio.c:24:13:diskio_log	176	static
-../FATFS/Target/user_diskio.c:127:9:USER_status.part.0	8	static
-../FATFS/Target/user_diskio.c:127:9:USER_status	0	static
-../FATFS/Target/user_diskio.c:62:16:sd_wait_ready	16	static
-../FATFS/Target/user_diskio.c:78:9:USER_initialize	48	static
-../FATFS/Target/user_diskio.c:140:9:USER_read	32	static
-../FATFS/Target/user_diskio.c:180:9:USER_write	32	static
-../FATFS/Target/user_diskio.c:221:9:USER_ioctl	40	static
+../FATFS/Target/user_diskio.c:29:13:diskio_log	176	static
+../FATFS/Target/user_diskio.c:121:9:USER_status.part.0	8	static
+../FATFS/Target/user_diskio.c:121:9:USER_status	0	static
+../FATFS/Target/user_diskio.c:67:16:sd_wait_ready	16	static
+../FATFS/Target/user_diskio.c:86:9:USER_initialize	48	static
+../FATFS/Target/user_diskio.c:133:9:USER_read	32	static
+../FATFS/Target/user_diskio.c:177:9:USER_write	32	static,ignoring_inline_asm
+../FATFS/Target/user_diskio.c:219:9:USER_ioctl	40	static

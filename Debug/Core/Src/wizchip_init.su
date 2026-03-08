@@ -1,5 +1,0 @@
-../Core/Src/wizchip_init.c:46:6:csEnable	0	static
-../Core/Src/wizchip_init.c:51:6:csDisable	0	static
-../Core/Src/wizchip_init.c:56:6:spiWriteByte	32	static
-../Core/Src/wizchip_init.c:62:9:spiReadByte	24	static
-../Core/Src/wizchip_init.c:8:6:WIZCHIPInitialize	40	static
