@@ -65,9 +65,9 @@ int sd_raw_rw_test(uint32_t test_sector)
 
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    irq_state = sd_irq_save();
-    hs = HAL_SD_ReadBlocks(&hsd, g_orig, test_sector, 1, 5000);
-    sd_irq_restore(irq_state);
+//    irq_state = sd_irq_save();
+//    hs = HAL_SD_ReadBlocks(&hsd, g_orig, test_sector, 1, 5000);
+//    sd_irq_restore(irq_state);
 
     if (hs != HAL_OK) {
         DBG.error("SDTEST: read orig fail err=0x%08lX hs=%d",
@@ -87,9 +87,8 @@ int sd_raw_rw_test(uint32_t test_sector)
 
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    irq_state = sd_irq_save();
+    __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
     hs = HAL_SD_WriteBlocks(&hsd, g_tx, test_sector, 1, 5000);
-    sd_irq_restore(irq_state);
 
     if (hs != HAL_OK) {
         DBG.error("SDTEST: write test fail err=0x%08lX hs=%d",
@@ -135,9 +134,9 @@ int sd_raw_rw_test(uint32_t test_sector)
 
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    irq_state = sd_irq_save();
-    hs = HAL_SD_WriteBlocks(&hsd, g_orig, test_sector, 1, 5000);
-    sd_irq_restore(irq_state);
+  //   irq_state = sd_irq_save();
+  //  hs = HAL_SD_WriteBlocks(&hsd, g_orig, test_sector, 1, 5000);
+  //  sd_irq_restore(irq_state);
 
     if (hs != HAL_OK) {
         DBG.error("SDTEST: restore fail err=0x%08lX hs=%d",

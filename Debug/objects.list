@@ -3,6 +3,7 @@
 "./Core/Src/data_buffer.o"
 "./Core/Src/dbg_cwrap.o"
 "./Core/Src/debug_uart.o"
+"./Core/Src/debug_uart_c.o"
 "./Core/Src/dma.o"
 "./Core/Src/ds3231.o"
 "./Core/Src/https_w5500.o"

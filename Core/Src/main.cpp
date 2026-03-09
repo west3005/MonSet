@@ -11,10 +11,12 @@
 #include "app.hpp"
 #include "spi.h"
 
+
 extern "C" {
 #include "fatfs.h"
 #include "sdio.h"
 #include "stm32f4xx_hal.h"
+#include "dma.h"
 }
 
 /* ======== Глобальные флаги ======== */
@@ -49,6 +51,7 @@ extern "C" void MX_I2C1_Init(void);
 extern "C" void MX_RTC_Init(void);
 extern "C" void MX_TIM6_Init(void);
 extern "C" void MX_RNG_Init(void);
+extern "C" void MX_DMA_Init(void);
 
 /* =============================================================
  * main()
@@ -97,6 +100,10 @@ extern "C" int main(void)
 
     MX_SPI1_Init();
     DBG.info("SPI1 OK");
+
+    // DMA2 clock enable (даже без использования SDIO DMA)
+    MX_DMA_Init();
+    DBG.info("DMA OK");
 
     if (!g_sd_disabled) {
         DBG.info("MARK before SDIO");

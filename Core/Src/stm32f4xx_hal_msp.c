@@ -20,15 +20,14 @@ void HAL_SD_MspInit(SD_HandleTypeDef *hsd)
         __HAL_RCC_GPIOD_CLK_ENABLE();
 
         /* PC8 -> SDIO_D0 */
-        GPIO_InitTypeDef GPIO_InitStruct = {0};
         GPIO_InitStruct.Pin       = GPIO_PIN_8;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull      = GPIO_PULLUP;
+        GPIO_InitStruct.Pull      = GPIO_PULLUP; // Важно для стабильности D0
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
         HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-        /* PC12 -> SDIO_CK */
+        /* PC12 -> SDIO_CK (no pull on clock line) */
         GPIO_InitStruct.Pin       = GPIO_PIN_12;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
@@ -39,10 +38,26 @@ void HAL_SD_MspInit(SD_HandleTypeDef *hsd)
         /* PD2 -> SDIO_CMD */
         GPIO_InitStruct.Pin       = GPIO_PIN_2;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull      = GPIO_PULLUP;
+        GPIO_InitStruct.Pull      = GPIO_PULLUP; // Важно для стабильности CMD
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
         HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+        /*
+         * Включаем Hardware Flow Control для предотвращения ошибок FIFO.
+         * Это помогает при высоких частотах шины.
+         */
+        hsd->Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_ENABLE;
+
+        /*
+         * SDIO global interrupt.
+         * Priority 5 (lower than SysTick=0, higher than app tasks).
+         * Required by HAL_SD_IRQHandler to signal transfer complete
+         * even in polling mode (HAL internally uses SDIO->STA flags
+         * which are cleared via this handler path).
+         */
+        HAL_NVIC_SetPriority(SDIO_IRQn, 5, 0);
+        HAL_NVIC_EnableIRQ(SDIO_IRQn);
     }
 }
 
@@ -50,8 +65,8 @@ void HAL_SD_MspDeInit(SD_HandleTypeDef *hsd)
 {
     if (hsd->Instance == SDIO)
     {
+        HAL_NVIC_DisableIRQ(SDIO_IRQn);
         __HAL_RCC_SDIO_CLK_DISABLE();
-
         HAL_GPIO_DeInit(GPIOC, GPIO_PIN_8 | GPIO_PIN_12);
         HAL_GPIO_DeInit(GPIOD, GPIO_PIN_2);
     }
@@ -61,12 +76,10 @@ void HAL_SD_MspDeInit(SD_HandleTypeDef *hsd)
 void HAL_UART_MspInit(UART_HandleTypeDef *huart)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
-
     if (huart->Instance == USART1)
     {
         __HAL_RCC_USART1_CLK_ENABLE();
         __HAL_RCC_GPIOA_CLK_ENABLE();
-
         GPIO_InitStruct.Pin       = GPIO_PIN_9 | GPIO_PIN_10;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
@@ -78,7 +91,6 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     {
         __HAL_RCC_USART2_CLK_ENABLE();
         __HAL_RCC_GPIOA_CLK_ENABLE();
-
         GPIO_InitStruct.Pin       = GPIO_PIN_2 | GPIO_PIN_3;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
@@ -90,7 +102,6 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     {
         __HAL_RCC_USART3_CLK_ENABLE();
         __HAL_RCC_GPIOB_CLK_ENABLE();
-
         GPIO_InitStruct.Pin       = GPIO_PIN_10 | GPIO_PIN_11;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
@@ -102,7 +113,6 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
     {
         __HAL_RCC_USART6_CLK_ENABLE();
         __HAL_RCC_GPIOC_CLK_ENABLE();
-
         GPIO_InitStruct.Pin       = GPIO_PIN_6 | GPIO_PIN_7;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
@@ -142,16 +152,13 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
     if (hi2c->Instance == I2C1)
     {
         GPIO_InitTypeDef GPIO_InitStruct = {0};
-
         __HAL_RCC_GPIOB_CLK_ENABLE();
-
         GPIO_InitStruct.Pin       = GPIO_PIN_6 | GPIO_PIN_7;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_OD;
         GPIO_InitStruct.Pull      = GPIO_PULLUP;
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF4_I2C1;
         HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
         __HAL_RCC_I2C1_CLK_ENABLE();
     }
 }
@@ -168,18 +175,12 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef *hi2c)
 /* ========= RNG MSP ========= */
 void HAL_RNG_MspInit(RNG_HandleTypeDef *hrng)
 {
-    if (hrng->Instance == RNG)
-    {
-        __HAL_RCC_RNG_CLK_ENABLE();
-    }
+    if (hrng->Instance == RNG) { __HAL_RCC_RNG_CLK_ENABLE(); }
 }
 
 void HAL_RNG_MspDeInit(RNG_HandleTypeDef *hrng)
 {
-    if (hrng->Instance == RNG)
-    {
-        __HAL_RCC_RNG_CLK_DISABLE();
-    }
+    if (hrng->Instance == RNG) { __HAL_RCC_RNG_CLK_DISABLE(); }
 }
 
 /* ========= RTC MSP ========= */
