@@ -5,7 +5,9 @@
 #include <cstdio>
 
 extern "C" {
+#include "sdio.h"
 #include "sd_raw_test.h"
+#include "stm32f4xx_hal_sd.h"
 }
 
 static const char* frStr(FRESULT fr)
@@ -61,6 +63,24 @@ bool SdBackup::init()
   char drive[3];
   make_drive(drive, sizeof(drive));
 
+  /* 
+   * NEW: Run RAW read/write test BEFORE mounting filesystem.
+   * After the test, we must do a full re-init of SDIO to clear HAL state.
+   */
+  {
+    int rawOk = sd_raw_rw_test(2000000UL);
+    DBG.info("SDTEST: result=%d", rawOk);
+
+    /* Full reset of SDIO handle state */
+    HAL_SD_DeInit(&hsd);
+    MX_SDIO_SD_Init();
+
+    /* Force working speed (24 MHz) immediately after test/re-init */
+    hsd.Init.ClockDiv = 0U;
+    MODIFY_REG(SDIO->CLKCR, SDIO_CLKCR_CLKDIV, 0U);
+    HAL_Delay(10);
+  }
+
   const uint32_t t0 = HAL_GetTick();
   const uint32_t timeoutMs = 5000;
   FRESULT fr = FR_INT_ERR;
@@ -82,23 +102,15 @@ bool SdBackup::init()
 
   m_mounted = true;
   DBG.info("SD: mounted drive=%s", drive);
-
-  {
-    int rawOk = sd_raw_rw_test(2000000UL);
-    DBG.info("SDTEST: result=%d", rawOk);
-  }
-
   return true;
 }
 
 void SdBackup::deinit()
 {
   if (!m_mounted) return;
-
   char drive[3];
   make_drive(drive, sizeof(drive));
   f_mount(nullptr, drive, 0);
-
   m_mounted = false;
   DBG.info("SD: unmounted drive=%s", drive);
 }
@@ -106,10 +118,8 @@ void SdBackup::deinit()
 bool SdBackup::exists() const
 {
   if (!m_mounted) return false;
-
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
-
   FILINFO fno;
   FRESULT fr = f_stat(path, &fno);
   return (fr == FR_OK);
@@ -118,10 +128,8 @@ bool SdBackup::exists() const
 bool SdBackup::remove()
 {
   if (!m_mounted) return false;
-
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
-
   FRESULT fr = f_unlink(path);
   if (fr != FR_OK) {
     DBG.error("SD: unlink fail path=%s (FR=%d %s)", path, (int)fr, frStr(fr));
@@ -134,15 +142,13 @@ DWORD SdBackup::getFreeSpaceBytes() const
 {
   char drive[3];
   make_drive(drive, sizeof(drive));
-
   FATFS* fs = nullptr;
-  DWORD  fre_clust = 0;
+  DWORD fre_clust = 0;
   FRESULT fr = f_getfree(drive, &fre_clust, &fs);
   if (fr != FR_OK || fs == nullptr) {
     DBG.error("SD: f_getfree fail (FR=%d %s)", (int)fr, frStr(fr));
     return 0;
   }
-
   DWORD bytes = fre_clust * fs->csize * 512UL;
   return bytes;
 }
@@ -150,22 +156,16 @@ DWORD SdBackup::getFreeSpaceBytes() const
 bool SdBackup::checkAndRotateFile(FIL& f, const char* path)
 {
   FSIZE_t sz = f_size(&f);
-
   if (sz < MAX_BACKUP_FILE_SIZE) {
     return true;
   }
-
-  DBG.warn("SD: backup file too big (%lu bytes) -> rotate (truncate)",
-           (unsigned long)sz);
-
+  DBG.warn("SD: backup file too big (%lu bytes) -> rotate (truncate)", (unsigned long)sz);
   f_close(&f);
-
   FRESULT fr = f_open(&f, path, FA_CREATE_ALWAYS | FA_WRITE);
   if (fr != FR_OK) {
     DBG.error("SD: rotate reopen fail path=%s (FR=%d %s)", path, (int)fr, frStr(fr));
     return false;
   }
-
   return true;
 }
 
@@ -173,51 +173,39 @@ static bool writeLineWithRetry(FIL& f, const char* data, UINT len, uint8_t maxRe
 {
   FRESULT fr = FR_OK;
   UINT bw = 0;
-
   for (uint8_t attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
       DBG.warn("SD: write retry %u/%u", (unsigned)attempt, (unsigned)maxRetries);
       HAL_Delay(50);
     }
-
     fr = f_write(&f, data, len, &bw);
-
     if (fr == FR_OK && bw == len) {
       return true;
     }
-
     DBG.error("SD: write attempt %u failed (FR=%d %s bw=%u/%u)",
               (unsigned)attempt + 1, (int)fr, frStr(fr), (unsigned)bw, (unsigned)len);
-
     if (fr != FR_DISK_ERR) {
       break;
     }
-
     f_sync(&f);
   }
-
   return false;
 }
 
 static bool syncWithRetry(FIL& f, uint8_t maxRetries)
 {
   FRESULT fr = FR_OK;
-
   for (uint8_t attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
       DBG.warn("SD: sync retry %u/%u", (unsigned)attempt, (unsigned)maxRetries);
       HAL_Delay(20);
     }
-
     fr = f_sync(&f);
     if (fr == FR_OK) {
       return true;
     }
-
-    DBG.error("SD: sync attempt %u failed (FR=%d %s)",
-              (unsigned)attempt + 1, (int)fr, frStr(fr));
+    DBG.error("SD: sync attempt %u failed (FR=%d %s)", (unsigned)attempt + 1, (int)fr, frStr(fr));
   }
-
   return false;
 }
 
@@ -227,16 +215,14 @@ bool SdBackup::appendLine(const char* jsonLine)
     DBG.error("SD: appendLine not mounted or null");
     return false;
   }
-
   const size_t n = std::strlen(jsonLine);
-
   if (n == 0 || n > Config::JSONL_LINE_MAX) {
     DBG.error("SD: JSONL line too long (%u)", (unsigned)n);
     return false;
   }
-
   for (size_t i = 0; i < n; i++) {
-    if (jsonLine[i] == '\r' || jsonLine[i] == '\n') {
+    if (jsonLine[i] == '\r' || jsonLine[i] == '
+') {
       DBG.error("SD: JSONL line contains CR/LF");
       return false;
     }
@@ -252,7 +238,6 @@ bool SdBackup::appendLine(const char* jsonLine)
 
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
-
   FIL f{};
   FRESULT fr = FR_INT_ERR;
   const uint8_t openRetries = 3;
@@ -262,10 +247,8 @@ bool SdBackup::appendLine(const char* jsonLine)
       DBG.warn("SD: open retry %u/%u", (unsigned)attempt, (unsigned)openRetries);
       HAL_Delay(50);
     }
-
     fr = f_open(&f, path, FA_OPEN_ALWAYS | FA_WRITE);
     if (fr == FR_OK) break;
-
     DBG.error("SD: open for append fail attempt %u path=%s (FR=%d %s)",
               (unsigned)attempt + 1, path, (int)fr, frStr(fr));
   }
@@ -293,7 +276,8 @@ bool SdBackup::appendLine(const char* jsonLine)
     return false;
   }
 
-  const char eol[] = "\r\n";
+  const char eol[] = "\r
+";
   if (!writeLineWithRetry(f, eol, sizeof(eol) - 1, 3)) {
     DBG.error("SD: write EOL failed after retries");
     f_close(&f);
@@ -310,23 +294,17 @@ bool SdBackup::appendLine(const char* jsonLine)
   return true;
 }
 
-bool SdBackup::readChunkAsJsonArray(char* out,
-                                    uint32_t outSize,
-                                    uint32_t maxPayloadBytes,
-                                    uint32_t& linesRead,
-                                    FSIZE_t& bytesUsedFromFile)
+bool SdBackup::readChunkAsJsonArray(char* out, uint32_t outSize, uint32_t maxPayloadBytes,
+                                   uint32_t& linesRead, FSIZE_t& bytesUsedFromFile)
 {
-  linesRead         = 0;
+  linesRead = 0;
   bytesUsedFromFile = 0;
-
   if (!m_mounted || !out || outSize < 4) return false;
-
   if (maxPayloadBytes >= outSize) maxPayloadBytes = outSize - 1;
   if (maxPayloadBytes < 4) return false;
 
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
-
   FIL f{};
   FRESULT fr = f_open(&f, path, FA_READ);
   if (fr != FR_OK) {
@@ -336,23 +314,19 @@ bool SdBackup::readChunkAsJsonArray(char* out,
 
   uint32_t off = 0;
   out[off++] = '[';
-
-  char   line[Config::JSONL_LINE_MAX + 4];
+  char line[Config::JSONL_LINE_MAX + 4];
   FSIZE_t lastPosAfterLine = 0;
 
   while (true) {
     char* s = f_gets(line, sizeof(line), &f);
     if (!s) break;
-
     lastPosAfterLine = f_tell(&f);
 
     size_t n = std::strlen(line);
-    while (n > 0 &&
-           (line[n - 1] == '\r' || line[n - 1] == '\n' ||
-            line[n - 1] == ' '  || line[n - 1] == '\t')) {
+    while (n > 0 && (line[n-1] == '\r' || line[n-1] == '
+' || line[n-1] == ' ' || line[n-1] == '	')) {
       line[--n] = '\0';
     }
-
     if (n == 0) {
       bytesUsedFromFile = lastPosAfterLine;
       continue;
@@ -360,19 +334,17 @@ bool SdBackup::readChunkAsJsonArray(char* out,
 
     uint32_t need = (linesRead ? 1u : 0u) + (uint32_t)n + 1u + 1u;
     if (off + need > maxPayloadBytes) break;
-    if (off + need > outSize)        break;
+    if (off + need > outSize) break;
 
     if (linesRead) out[off++] = ',';
     std::memcpy(&out[off], line, n);
     off += (uint32_t)n;
-
     linesRead++;
     bytesUsedFromFile = lastPosAfterLine;
   }
 
   out[off++] = ']';
-  out[off]   = '\0';
-
+  out[off] = '\0';
   f_close(&f);
 
   if (!(linesRead > 0 && bytesUsedFromFile > 0)) {
@@ -380,7 +352,6 @@ bool SdBackup::readChunkAsJsonArray(char* out,
               (unsigned)linesRead, (unsigned long)bytesUsedFromFile, path);
     return false;
   }
-
   return true;
 }
 
@@ -391,7 +362,6 @@ bool SdBackup::consumePrefix(FSIZE_t bytesUsedFromFile)
 
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
-
   char tmpPath[64];
   make_full_path(tmpPath, sizeof(tmpPath), "backup.tmp");
 
@@ -432,16 +402,17 @@ bool SdBackup::consumePrefix(FSIZE_t bytesUsedFromFile)
   }
 
   uint8_t buf[512];
-  UINT    br = 0, bw = 0;
-
+  UINT br = 0, bw = 0;
   while (true) {
     fr = f_read(&src, buf, sizeof(buf), &br);
     if (fr != FR_OK) {
       DBG.error("SD: consume read fail (FR=%d %s)", (int)fr, frStr(fr));
       break;
     }
-    if (br == 0) { fr = FR_OK; break; }
-
+    if (br == 0) {
+      fr = FR_OK;
+      break;
+    }
     fr = f_write(&dst, buf, br, &bw);
     if (fr != FR_OK || bw != br) {
       DBG.error("SD: consume write fail (FR=%d %s bw=%u/%u)",
