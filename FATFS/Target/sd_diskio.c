@@ -29,6 +29,9 @@ static volatile DSTATUS Stat = STA_NOINIT;
 static DSTATUS SD_CheckStatus(BYTE lun);
 static HAL_StatusTypeDef SD_WaitCardReady(uint32_t timeout_ms);
 
+static uint32_t SD_IrqSave(void);
+static void SD_IrqRestore(uint32_t primask);
+
 DSTATUS SD_initialize (BYTE);
 DSTATUS SD_status (BYTE);
 DRESULT SD_read (BYTE, BYTE*, DWORD, UINT);
@@ -51,6 +54,21 @@ const Diskio_drvTypeDef SD_Driver =
   SD_ioctl,
 #endif
 };
+
+static uint32_t SD_IrqSave(void)
+{
+  uint32_t primask = __get_PRIMASK();
+  __disable_irq();
+  return primask;
+}
+
+static void SD_IrqRestore(uint32_t primask)
+{
+  if (primask == 0U)
+  {
+    __enable_irq();
+  }
+}
 
 static HAL_StatusTypeDef SD_WaitCardReady(uint32_t timeout_ms)
 {
@@ -123,6 +141,9 @@ DSTATUS SD_status(BYTE lun)
 
 DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 {
+  HAL_StatusTypeDef hs;
+  uint32_t irq_state;
+
   (void)lun;
 
   if (Stat & STA_NOINIT)
@@ -135,11 +156,15 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
     return RES_PARERR;
   }
 
-  if (HAL_SD_ReadBlocks(&hsd,
-                        (uint8_t *)buff,
-                        (uint32_t)sector,
-                        (uint32_t)count,
-                        SD_TIMEOUT) != HAL_OK)
+  irq_state = SD_IrqSave();
+  hs = HAL_SD_ReadBlocks(&hsd,
+                         (uint8_t *)buff,
+                         (uint32_t)sector,
+                         (uint32_t)count,
+                         SD_TIMEOUT);
+  SD_IrqRestore(irq_state);
+
+  if (hs != HAL_OK)
   {
     return RES_ERROR;
   }
@@ -155,6 +180,9 @@ DRESULT SD_read(BYTE lun, BYTE *buff, DWORD sector, UINT count)
 #if _USE_WRITE == 1
 DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
 {
+  HAL_StatusTypeDef hs;
+  uint32_t irq_state;
+
   (void)lun;
 
   if (Stat & STA_NOINIT)
@@ -167,11 +195,15 @@ DRESULT SD_write(BYTE lun, const BYTE *buff, DWORD sector, UINT count)
     return RES_PARERR;
   }
 
-  if (HAL_SD_WriteBlocks(&hsd,
-                         (uint8_t *)buff,
-                         (uint32_t)sector,
-                         (uint32_t)count,
-                         SD_TIMEOUT) != HAL_OK)
+  irq_state = SD_IrqSave();
+  hs = HAL_SD_WriteBlocks(&hsd,
+                          (uint8_t *)buff,
+                          (uint32_t)sector,
+                          (uint32_t)count,
+                          SD_TIMEOUT);
+  SD_IrqRestore(irq_state);
+
+  if (hs != HAL_OK)
   {
     return RES_ERROR;
   }

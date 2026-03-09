@@ -12,6 +12,30 @@ extern "C" {
 
 extern SD_HandleTypeDef hsd;
 
+#if defined(__GNUC__)
+#define SD_ALIGN4 __attribute__((aligned(4)))
+#else
+#define SD_ALIGN4
+#endif
+
+static uint8_t SD_ALIGN4 g_orig[512];
+static uint8_t SD_ALIGN4 g_tx[512];
+static uint8_t SD_ALIGN4 g_rx[512];
+
+static uint32_t sd_irq_save(void)
+{
+    uint32_t primask = __get_PRIMASK();
+    __disable_irq();
+    return primask;
+}
+
+static void sd_irq_restore(uint32_t primask)
+{
+    if (primask == 0U) {
+        __enable_irq();
+    }
+}
+
 static int sd_wait_card_ready_ms(uint32_t timeout_ms)
 {
     uint32_t t0 = HAL_GetTick();
@@ -28,9 +52,7 @@ static int sd_wait_card_ready_ms(uint32_t timeout_ms)
 int sd_raw_rw_test(uint32_t test_sector)
 {
     HAL_StatusTypeDef hs;
-    uint8_t orig[512];
-    uint8_t tx[512];
-    uint8_t rx[512];
+    uint32_t irq_state;
     uint32_t i;
 
     DBG.info("SDTEST: sector=%lu begin", (unsigned long)test_sector);
@@ -43,7 +65,10 @@ int sd_raw_rw_test(uint32_t test_sector)
 
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    hs = HAL_SD_ReadBlocks(&hsd, orig, test_sector, 1, 5000);
+    irq_state = sd_irq_save();
+    hs = HAL_SD_ReadBlocks(&hsd, g_orig, test_sector, 1, 5000);
+    sd_irq_restore(irq_state);
+
     if (hs != HAL_OK) {
         DBG.error("SDTEST: read orig fail err=0x%08lX hs=%d",
                   HAL_SD_GetError(&hsd), (int)hs);
@@ -56,13 +81,16 @@ int sd_raw_rw_test(uint32_t test_sector)
         return 0;
     }
 
-    for (i = 0; i < sizeof(tx); i++) {
-        tx[i] = (uint8_t)(i ^ 0xA5U);
+    for (i = 0; i < sizeof(g_tx); i++) {
+        g_tx[i] = (uint8_t)(i ^ 0xA5U);
     }
 
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    hs = HAL_SD_WriteBlocks(&hsd, tx, test_sector, 1, 5000);
+    irq_state = sd_irq_save();
+    hs = HAL_SD_WriteBlocks(&hsd, g_tx, test_sector, 1, 5000);
+    sd_irq_restore(irq_state);
+
     if (hs != HAL_OK) {
         DBG.error("SDTEST: write test fail err=0x%08lX hs=%d",
                   HAL_SD_GetError(&hsd), (int)hs);
@@ -75,10 +103,13 @@ int sd_raw_rw_test(uint32_t test_sector)
         return 0;
     }
 
-    memset(rx, 0, sizeof(rx));
+    memset(g_rx, 0, sizeof(g_rx));
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    hs = HAL_SD_ReadBlocks(&hsd, rx, test_sector, 1, 5000);
+    irq_state = sd_irq_save();
+    hs = HAL_SD_ReadBlocks(&hsd, g_rx, test_sector, 1, 5000);
+    sd_irq_restore(irq_state);
+
     if (hs != HAL_OK) {
         DBG.error("SDTEST: readback fail err=0x%08lX hs=%d",
                   HAL_SD_GetError(&hsd), (int)hs);
@@ -91,11 +122,11 @@ int sd_raw_rw_test(uint32_t test_sector)
         return 0;
     }
 
-    if (memcmp(tx, rx, 512) != 0) {
+    if (memcmp(g_tx, g_rx, 512) != 0) {
         for (i = 0; i < 512; i++) {
-            if (tx[i] != rx[i]) {
+            if (g_tx[i] != g_rx[i]) {
                 DBG.error("SDTEST: verify mismatch at %lu tx=%02X rx=%02X",
-                          (unsigned long)i, tx[i], rx[i]);
+                          (unsigned long)i, g_tx[i], g_rx[i]);
                 break;
             }
         }
@@ -104,7 +135,10 @@ int sd_raw_rw_test(uint32_t test_sector)
 
     __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
 
-    hs = HAL_SD_WriteBlocks(&hsd, orig, test_sector, 1, 5000);
+    irq_state = sd_irq_save();
+    hs = HAL_SD_WriteBlocks(&hsd, g_orig, test_sector, 1, 5000);
+    sd_irq_restore(irq_state);
+
     if (hs != HAL_OK) {
         DBG.error("SDTEST: restore fail err=0x%08lX hs=%d",
                   HAL_SD_GetError(&hsd), (int)hs);

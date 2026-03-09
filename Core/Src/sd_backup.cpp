@@ -7,6 +7,7 @@
 extern "C" {
 #include "sd_raw_test.h"
 }
+
 static const char* frStr(FRESULT fr)
 {
   switch (fr) {
@@ -37,10 +38,11 @@ static const char* frStr(FRESULT fr)
 void SdBackup::make_drive(char* out, size_t out_sz) const
 {
   if (out_sz < 3) return;
-  out[0] = SDPath[0] ? SDPath[0] : '0';  // ← Исправлено: USERPath → SDPath
+  out[0] = SDPath[0] ? SDPath[0] : '0';
   out[1] = ':';
   out[2] = '\0';
 }
+
 void SdBackup::make_full_path(char* out, size_t out_sz, const char* fname) const
 {
   char drive[3];
@@ -88,7 +90,6 @@ bool SdBackup::init()
 
   return true;
 }
-
 
 void SdBackup::deinit()
 {
@@ -168,7 +169,6 @@ bool SdBackup::checkAndRotateFile(FIL& f, const char* path)
   return true;
 }
 
-/* Запись строки с повторной попыткой при ошибке SDIO */
 static bool writeLineWithRetry(FIL& f, const char* data, UINT len, uint8_t maxRetries)
 {
   FRESULT fr = FR_OK;
@@ -177,31 +177,28 @@ static bool writeLineWithRetry(FIL& f, const char* data, UINT len, uint8_t maxRe
   for (uint8_t attempt = 0; attempt < maxRetries; attempt++) {
     if (attempt > 0) {
       DBG.warn("SD: write retry %u/%u", (unsigned)attempt, (unsigned)maxRetries);
-      HAL_Delay(50); // Пауза перед повтором
+      HAL_Delay(50);
     }
 
     fr = f_write(&f, data, len, &bw);
 
     if (fr == FR_OK && bw == len) {
-      return true; // Успех
+      return true;
     }
 
     DBG.error("SD: write attempt %u failed (FR=%d %s bw=%u/%u)",
               (unsigned)attempt + 1, (int)fr, frStr(fr), (unsigned)bw, (unsigned)len);
 
-    /* Если FR_DISK_ERR - пробуем ещё раз, иначе выходим */
     if (fr != FR_DISK_ERR) {
       break;
     }
 
-    /* Синхронизируем перед повтором, чтобы сбросить состояние */
     f_sync(&f);
   }
 
   return false;
 }
 
-/* Синхронизация с повторной попыткой */
 static bool syncWithRetry(FIL& f, uint8_t maxRetries)
 {
   FRESULT fr = FR_OK;
@@ -256,7 +253,6 @@ bool SdBackup::appendLine(const char* jsonLine)
   char path[64];
   make_full_path(path, sizeof(path), Config::BACKUP_FILENAME);
 
-  /* Повторные попытки открытия файла */
   FIL f{};
   FRESULT fr = FR_INT_ERR;
   const uint8_t openRetries = 3;
@@ -291,7 +287,6 @@ bool SdBackup::appendLine(const char* jsonLine)
     return false;
   }
 
-  /* Запись данных с повтором */
   if (!writeLineWithRetry(f, jsonLine, (UINT)n, 3)) {
     DBG.error("SD: write line failed after retries");
     f_close(&f);
@@ -305,7 +300,6 @@ bool SdBackup::appendLine(const char* jsonLine)
     return false;
   }
 
-  /* Синхронизация с повтором */
   if (!syncWithRetry(f, 3)) {
     DBG.error("SD: sync failed after retries");
     f_close(&f);
