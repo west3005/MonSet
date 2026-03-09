@@ -130,45 +130,42 @@ DSTATUS SD_status(BYTE pdrv)
 
 DRESULT SD_read(BYTE pdrv, BYTE *buff, DWORD sector, UINT count)
 {
-    diskio_log("[DISKIO] read: sec=%lu cnt=%u\r\n",
-               (unsigned long)sector, (unsigned)count);
+    HAL_StatusTypeDef hs;
 
     if (pdrv != 0 || buff == NULL || count == 0) return RES_PARERR;
-    if (SD_status(pdrv) & STA_NOINIT) {
-        diskio_log("[DISKIO] read: not ready\r\n");
-        return RES_NOTRDY;
-    }
+    if (SD_status(pdrv) & STA_NOINIT) return RES_NOTRDY;
 
     if (!sd_wait_ready(SD_READY_WAIT_MS)) {
         diskio_log("[DISKIO] read: card not ready before read\r\n");
         return RES_ERROR;
     }
 
-    HAL_StatusTypeDef hs = HAL_SD_ReadBlocks(
-        &hsd, buff, (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
+    __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
+
+    hs = HAL_SD_ReadBlocks(&hsd, buff,
+                           (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
 
     if (hs != HAL_OK) {
-        diskio_log("[DISKIO] read poll err=0x%08lX hs=%d\r\n",
-                   HAL_SD_GetError(&hsd), (int)hs);
+        diskio_log("[DISKIO] read: HAL_SD_ReadBlocks failed err=0x%08lX sta=0x%08lX hs=%d\r\n",
+                   HAL_SD_GetError(&hsd), SDIO->STA, (int)hs);
         return RES_ERROR;
     }
 
-    /* 🔴 Ждать окончания приёма данных */
-    while (__HAL_SD_GET_FLAG(&hsd, SDIO_FLAG_RXACT)) {
-        IWDG->KR = 0xAAAA;
+    if (!sd_wait_ready(SD_TIMEOUT_MS)) {
+        diskio_log("[DISKIO] read: ready wait failed err=0x%08lX sta=0x%08lX\r\n",
+                   HAL_SD_GetError(&hsd), SDIO->STA);
+        return RES_ERROR;
     }
 
-    diskio_log("[DISKIO] read: OK\r\n");
     return RES_OK;
 }
+
+
 
 #if _USE_WRITE == 1
 DRESULT SD_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
 {
     HAL_StatusTypeDef hs;
-
-    diskio_log("[DISKIO] write: sec=%lu cnt=%u\r\n",
-               (unsigned long)sector, (unsigned)count);
 
     if (pdrv != 0 || buff == NULL || count == 0) return RES_PARERR;
     if (SD_status(pdrv) & STA_NOINIT) return RES_NOTRDY;
@@ -179,24 +176,28 @@ DRESULT SD_write(BYTE pdrv, const BYTE *buff, DWORD sector, UINT count)
         return RES_ERROR;
     }
 
-    hs = HAL_SD_WriteBlocks(&hsd, (uint8_t*)buff, (uint32_t)sector,
-                            (uint32_t)count, SD_TIMEOUT_MS);
+    __HAL_SD_CLEAR_FLAG(&hsd, SDIO_STATIC_FLAGS);
+
+    hs = HAL_SD_WriteBlocks(&hsd, (uint8_t*)buff,
+                            (uint32_t)sector, (uint32_t)count, SD_TIMEOUT_MS);
 
     if (hs != HAL_OK) {
-        diskio_log("[DISKIO] write: HAL_SD_WriteBlocks failed err=0x%08lX hs=%d\r\n",
-                   HAL_SD_GetError(&hsd), (int)hs);
+        diskio_log("[DISKIO] write: HAL_SD_WriteBlocks failed err=0x%08lX sta=0x%08lX hs=%d\r\n",
+                   HAL_SD_GetError(&hsd), SDIO->STA, (int)hs);
         return RES_ERROR;
     }
 
     if (!sd_wait_ready(SD_TIMEOUT_MS)) {
-        diskio_log("[DISKIO] write: ready wait failed err=0x%08lX\r\n",
-                   HAL_SD_GetError(&hsd));
+        diskio_log("[DISKIO] write: ready wait failed err=0x%08lX sta=0x%08lX\r\n",
+                   HAL_SD_GetError(&hsd), SDIO->STA);
         return RES_ERROR;
     }
 
+    diskio_log("[DISKIO] write: OK\r\n");
     return RES_OK;
 }
 #endif /* _USE_WRITE == 1 */
+
 #if _USE_IOCTL == 1
 DRESULT SD_ioctl(BYTE pdrv, BYTE cmd, void *buff)
 {
