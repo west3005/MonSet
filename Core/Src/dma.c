@@ -2,57 +2,27 @@
 /**
   ******************************************************************************
   * @file    dma.c
-  * @brief   This file provides code for the configuration
-  *          of all the requested memory to memory DMA transfers.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2026 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
+  * @brief   DMA controller clock enable.
+  *          NOTE: SDIO uses polling mode (no DMA).
+  *          DMA2_Stream3 and DMA2_Stream6 are NOT used and NOT registered
+  *          in NVIC. MX_DMA_Init() only enables the DMA2 peripheral clock
+  *          in case other peripherals need it in future.
   ******************************************************************************
   */
 /* USER CODE END Header */
 
-/* Includes ------------------------------------------------------------------*/
 #include "dma.h"
 
-/* USER CODE BEGIN 0 */
-
-/* USER CODE END 0 */
-
-/*----------------------------------------------------------------------------*/
-/* Configure DMA                                                              */
-/*----------------------------------------------------------------------------*/
-
-/* USER CODE BEGIN 1 */
-
-/* USER CODE END 1 */
-
-/**
-  * Enable DMA controller clock
-  */
 void MX_DMA_Init(void)
 {
-
-  /* DMA controller clock enable */
+  /* DMA2 peripheral clock enable */
   __HAL_RCC_DMA2_CLK_ENABLE();
 
-  /* DMA interrupt init */
-  /* DMA2_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream3_IRQn);
-  /* DMA2_Stream6_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA2_Stream6_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA2_Stream6_IRQn);
-
+  /*
+   * No DMA streams configured for SDIO.
+   * SDIO operates in polling mode:
+   *   HAL_SD_ReadBlocks()  / HAL_SD_WriteBlocks() with timeout.
+   * SysTick interrupts MUST remain enabled during SD operations
+   * so that HAL_GetTick() works correctly inside the HAL.
+   */
 }
-
-/* USER CODE BEGIN 2 */
-
-/* USER CODE END 2 */
-
