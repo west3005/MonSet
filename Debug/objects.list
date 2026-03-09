@@ -14,6 +14,7 @@
 "./Core/Src/runtime_config.o"
 "./Core/Src/sd_backup.o"
 "./Core/Src/sd_card_spi.o"
+"./Core/Src/sd_raw_test.o"
 "./Core/Src/sdio.o"
 "./Core/Src/sensor_reader.o"
 "./Core/Src/sim800l.o"

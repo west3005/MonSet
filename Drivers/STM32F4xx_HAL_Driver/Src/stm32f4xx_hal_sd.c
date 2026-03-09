@@ -568,6 +568,7 @@ HAL_StatusTypeDef HAL_SD_ReadBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint3
   uint32_t errorstate;
   uint32_t tickstart = HAL_GetTick();
   uint32_t count, data, dataremaining;
+  uint32_t datacnt = 0U;   /* FIX: защита от переполнения/лишней записи в FIFO */
   uint32_t add = BlockAdd;
   uint8_t *tempbuff = pData;
 
@@ -786,7 +787,7 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
   SDIO_DataInitTypeDef config;
   uint32_t errorstate;
   uint32_t tickstart = HAL_GetTick();
-  uint32_t count, data, dataremaining;
+  uint32_t count, data, dataremaining, datacnt;
   uint32_t add = BlockAdd;
   uint8_t *tempbuff = pData;
 
@@ -840,6 +841,7 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
       /* Write Single Block command */
       errorstate = SDMMC_CmdWriteSingleBlock(hsd->Instance, add);
     }
+
     if(errorstate != HAL_SD_ERROR_NONE)
     {
       /* Clear all the static flags */
@@ -852,38 +854,55 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
 
     /* Write block(s) in polling mode */
     dataremaining = config.DataLength;
+    datacnt = 0U;
+
 #if defined(SDIO_STA_STBITERR)
     while(!__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_TXUNDERR | SDIO_FLAG_DCRCFAIL | SDIO_FLAG_DTIMEOUT | SDIO_FLAG_DATAEND | SDIO_FLAG_STBITERR))
-#else /* SDIO_STA_STBITERR not defined */
+#else
     while(!__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_TXUNDERR | SDIO_FLAG_DCRCFAIL | SDIO_FLAG_DTIMEOUT | SDIO_FLAG_DATAEND))
-#endif /* SDIO_STA_STBITERR */
+#endif
     {
-      if(__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_TXFIFOHE) && (dataremaining > 0U))
+      if((__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_TXFIFOHE) != RESET) &&
+         (dataremaining > 0U) &&
+         (datacnt < (NumberOfBlocks * BLOCKSIZE)))
       {
         /* Write data to SDIO Tx FIFO */
         for(count = 0U; count < 8U; count++)
         {
+          if(datacnt >= (NumberOfBlocks * BLOCKSIZE))
+          {
+            break;
+          }
+
           data = (uint32_t)(*tempbuff);
           tempbuff++;
           dataremaining--;
+          datacnt++;
+
           data |= ((uint32_t)(*tempbuff) << 8U);
           tempbuff++;
           dataremaining--;
+          datacnt++;
+
           data |= ((uint32_t)(*tempbuff) << 16U);
           tempbuff++;
           dataremaining--;
+          datacnt++;
+
           data |= ((uint32_t)(*tempbuff) << 24U);
           tempbuff++;
           dataremaining--;
+          datacnt++;
+
           (void)SDIO_WriteFIFO(hsd->Instance, &data);
         }
       }
 
-      if(((HAL_GetTick()-tickstart) >=  Timeout) || (Timeout == 0U))
+      if(((HAL_GetTick() - tickstart) >= Timeout) || (Timeout == 0U))
       {
         /* Clear all the static flags */
         __HAL_SD_CLEAR_FLAG(hsd, SDIO_STATIC_FLAGS);
-        hsd->ErrorCode |= errorstate;
+        hsd->ErrorCode |= HAL_SD_ERROR_TIMEOUT;
         hsd->State = HAL_SD_STATE_READY;
         hsd->Context = SD_CONTEXT_NONE;
         return HAL_TIMEOUT;
@@ -912,9 +931,9 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
     /* Get error state */
 #if defined(SDIO_STA_STBITERR)
     if(__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_DTIMEOUT) || (__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_STBITERR)))
-#else /* SDIO_STA_STBITERR not defined */
+#else
     if(__HAL_SD_GET_FLAG(hsd, SDIO_FLAG_DTIMEOUT))
-#endif /* SDIO_STA_STBITERR */
+#endif
     {
       /* Clear all the static flags */
       __HAL_SD_CLEAR_FLAG(hsd, SDIO_STATIC_FLAGS);
@@ -959,6 +978,7 @@ HAL_StatusTypeDef HAL_SD_WriteBlocks(SD_HandleTypeDef *hsd, uint8_t *pData, uint
     return HAL_ERROR;
   }
 }
+
 
 /**
   * @brief  Reads block(s) from a specified address in a card. The Data transfer

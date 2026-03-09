@@ -4,6 +4,9 @@
 #include <cstring>
 #include <cstdio>
 
+extern "C" {
+#include "sd_raw_test.h"
+}
 static const char* frStr(FRESULT fr)
 {
   switch (fr) {
@@ -55,9 +58,8 @@ bool SdBackup::init() {
   char drive[3];
   make_drive(drive, sizeof(drive));
 
-  const uint32_t t0        = HAL_GetTick();
+  const uint32_t t0 = HAL_GetTick();
   const uint32_t timeoutMs = 5000;
-
   FRESULT fr = FR_INT_ERR;
 
   while ((HAL_GetTick() - t0) < timeoutMs) {
@@ -69,14 +71,22 @@ bool SdBackup::init() {
   if (fr != FR_OK) {
     DBG.error("SD: mount timeout, last FR=%d %s", (int)fr, frStr(fr));
     m_mounted = false;
-    m_broken  = true;
+    m_broken = true;
     return false;
   }
 
   m_mounted = true;
   DBG.info("SD: mounted drive=%s", drive);
+
+  /* === RAW TEST: только для диагностики === */
+  {
+    int rawOk = sd_raw_rw_test(2000000UL);
+    DBG.info("SDTEST: result=%d", rawOk);
+  }
+
   return true;
 }
+
 
 void SdBackup::deinit()
 {

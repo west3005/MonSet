@@ -61,7 +61,8 @@ extern "C" int main(void)
     MX_GPIO_Init();
     MX_USART1_UART_Init();
     MX_USART6_UART_Init();
-
+    const char msg[] = "HELLO\r\n";
+    HAL_UART_Transmit(&huart1, (uint8_t*)msg, sizeof(msg)-1, HAL_MAX_DELAY);
     {
         const char boot1[] = "BOOT1 USART1 115200\r\n";
         HAL_UART_Transmit(&huart1, (uint8_t*)boot1, sizeof(boot1) - 1, 1000);
