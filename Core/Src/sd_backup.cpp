@@ -48,7 +48,8 @@ void SdBackup::make_full_path(char* out, size_t out_sz, const char* fname) const
   std::snprintf(out, out_sz, "%s/%s", drive, fname);
 }
 
-bool SdBackup::init() {
+bool SdBackup::init()
+{
   if (m_broken) {
     DBG.warn("SD: previously marked as broken, skip init");
     m_mounted = false;
@@ -64,7 +65,9 @@ bool SdBackup::init() {
 
   while ((HAL_GetTick() - t0) < timeoutMs) {
     fr = f_mount(&m_fatfs, drive, 1);
-    if (fr == FR_OK) break;
+    if (fr == FR_OK) {
+      break;
+    }
     HAL_Delay(50);
   }
 
@@ -78,7 +81,6 @@ bool SdBackup::init() {
   m_mounted = true;
   DBG.info("SD: mounted drive=%s", drive);
 
-  /* === RAW TEST: только для диагностики === */
   {
     int rawOk = sd_raw_rw_test(2000000UL);
     DBG.info("SDTEST: result=%d", rawOk);
