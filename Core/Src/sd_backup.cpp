@@ -10,7 +10,7 @@
 
 extern "C" {
 #include "sdio.h"
-#include "sd_raw_test.h"
+
 #include "stm32f4xx_hal_sd.h"
 }
 
