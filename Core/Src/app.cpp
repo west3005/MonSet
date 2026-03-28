@@ -7,7 +7,8 @@
 #include "app.hpp"
 #include "w5500_net.hpp"
 #include "https_w5500.hpp"
-#include "sim7020c_tls.hpp"
+//#include "sim7020c_tls.hpp"
+#include "air780e_tls.hpp"
 #include "runtime_config.hpp"
 #include "cfg_uart_bridge.hpp"
 #include "board_pins.hpp"
@@ -458,12 +459,12 @@ int App::postViaGsm(const char* json, uint16_t len)
     const char* url = Cfg().server_url;
 
     if (startsWith(url, "https://")) {
-        // Транспорт: mbedTLS поверх SIM7020C TCP socket
-        Sim7020cTls tls(m_gsm, Config::SIM7020_TLS_TIMEOUT_MS);
+        // Транспорт: mbedTLS поверх Air780E TCP socket
+        Air780eTls tls(m_gsm, Config::SIM7020_TLS_TIMEOUT_MS);
         code = tls.postJson(url, Cfg().server_auth_b64, json, len);
         DBG.info("GSM HTTPS: code=%d", code);
     } else if (startsWith(url, "http://")) {
-        // Plain HTTP (TCP socket, без TLS)
+        // Plain HTTP через AT+HTTPINIT
         code = (int)m_gsm.httpPost(url, json, len);
         DBG.info("GSM HTTP: code=%d", code);
     } else {
@@ -474,7 +475,6 @@ int App::postViaGsm(const char* json, uint16_t len)
     m_gsm.powerOff();
     return code;
 }
-
 // ============================================================================
 // Построитель JSON-payload
 // ============================================================================
@@ -512,17 +512,17 @@ void App::init()
     m_modbus.init();
 
     DBG.info("[3/5] SD init");
-    bool sdOk = false;
     if (!g_sd_disabled) {
-        sdOk = m_sdBackup.init();
-        DBG.info("[3/5] SD init: %s", sdOk ? "OK" : "FAIL");
+        m_sdOk = m_sdBackup.init();
+        DBG.info("[3/5] SD init: %s", m_sdOk ? "OK" : "FAIL");
     } else {
+        m_sdOk = false;
         DBG.warn("[3/5] SD пропущена (флаг watchdog-reset)");
     }
 
     DBG.info("[4/5] Load runtime config");
     bool cfgLoaded = false;
-    if (!g_sd_disabled && sdOk) {
+    if (!g_sd_disabled && m_sdOk) {
         cfgLoaded = Cfg().loadFromSd(RUNTIME_CONFIG_FILENAME);
     }
     if (!cfgLoaded) {
@@ -658,22 +658,26 @@ bool App::syncRtcWithNtpIfNeeded(const char* tag, bool verbose)
         ledBlink(1, 50);
 
         // Запись в журнал SD
-        if (!g_sd_disabled) {
+        if (m_sdOk) {
             char line[Config::JSONL_LINE_MAX];
             int l = buildPayload(line, sizeof(line), tsStr, val, ts, false);
             if (l > 0 && l < (int)sizeof(line)) {
-                if (!m_sdBackup.appendLine(line)) DBG.error("SD: appendLine failed");
+                if (!m_sdBackup.appendLine(line)) {
+                    DBG.error("SD: appendLine failed");
+                    m_sdOk = false;  // помечаем SD как нерабочую
+                }
             }
         }
 
-        // Периодическая отправка журнала
+        // Периодическая отправка
         m_pollCounter++;
         if (m_pollCounter >= Cfg().send_interval_polls) {
             m_pollCounter = 0;
-            if (g_sd_disabled) {
-                transmitSingle(val, ts);
+            if (m_sdOk) {
+                transmitBuffer();       // SD работает — отправляем журнал чанками
             } else {
-                transmitBuffer();
+                transmitSingle(val, ts); // SD недоступна — отправляем текущее измерение
+                DBG.warn("SD недоступна — отправлено одиночное измерение");
             }
         }
 
@@ -727,9 +731,10 @@ void App::transmitBuffer()
         return;
     }
 
+    // Проверка g_sd_disabled больше не нужна — run() уже выбрал правильный путь
     LinkChannel ch = readChannel();
     DBG.info("=== ОТПРАВКА ЖУРНАЛА (%s) ===",
-             ch == LinkChannel::Eth ? "ETH" : "GSM(SIM7020C)");
+             ch == LinkChannel::Eth ? "ETH" : "GSM(Air780E)");
 
     bool gsmOn = false;
     if (ch == LinkChannel::Gsm) {
@@ -751,7 +756,6 @@ void App::transmitBuffer()
 
     DBG.info("=== ОТПРАВКА ЖУРНАЛА КОНЕЦ ===");
 }
-
 // ============================================================================
 // Повторная отправка накопленного журнала чанками
 // ============================================================================
@@ -776,10 +780,26 @@ void App::retransmitBackup()
                  (unsigned)lines, (unsigned long)used,
                  (unsigned)std::strlen(m_json));
 
-        int http = (readChannel() == LinkChannel::Eth)
-                   ? postViaEth(m_json, (uint16_t)std::strlen(m_json))
-                   : (int)m_gsm.httpPost(Cfg().server_url, m_json,
-                                          (uint16_t)std::strlen(m_json));
+        int http = -1;
+        if (readChannel() == LinkChannel::Eth) {
+            http = postViaEth(m_json, (uint16_t)std::strlen(m_json));
+        } else {
+            // GSM уже инициализирован в transmitBuffer() — только отправляем
+            const char* url = Cfg().server_url;
+            if (startsWith(url, "https://")) {
+                Air780eTls tls(m_gsm, Config::SIM7020_TLS_TIMEOUT_MS);
+                http = tls.postJson(url, Cfg().server_auth_b64,
+                                    m_json, (uint16_t)std::strlen(m_json));
+                DBG.info("GSM HTTPS: code=%d", http);
+            } else if (startsWith(url, "http://")) {
+                http = (int)m_gsm.httpPost(url, m_json,
+                                            (uint16_t)std::strlen(m_json));
+                DBG.info("GSM HTTP: code=%d", http);
+            } else {
+                DBG.error("GSM: неизвестная схема URL");
+                return;
+            }
+        }
 
         if (http == 200) {
             if (!m_sdBackup.consumePrefix(used)) {

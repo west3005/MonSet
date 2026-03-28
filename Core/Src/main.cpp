@@ -10,7 +10,7 @@
 #include "debug_uart.hpp"
 #include "app.hpp"
 #include "spi.h"
-
+#include "air780e.hpp"
 
 extern "C" {
 #include "fatfs.h"
@@ -303,7 +303,7 @@ extern "C" void MX_USART1_UART_Init(void)
 }
 
 /* =============================================================
- * USART2 — SIM800L (9600 8N1) (PA2/PA3)
+ * USART2 — (PA2/PA3)
  * ============================================================= */
 extern "C" void MX_USART2_UART_Init(void)
 {

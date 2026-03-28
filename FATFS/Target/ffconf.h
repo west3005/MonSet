@@ -59,7 +59,7 @@
 / System Configurations
 /-----------------------------------------------------------------------------*/
 #define _FS_TINY             0
-#define _FS_EXFAT           1       /* 0:Disable or 1:Enable */
+#define _FS_EXFAT           0       /* 0:Disable or 1:Enable */
 #define _FS_NORTC            1
 #define _NORTC_MON          1
 #define _NORTC_MDAY         1

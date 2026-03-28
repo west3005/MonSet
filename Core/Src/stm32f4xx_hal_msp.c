@@ -22,12 +22,12 @@ void HAL_SD_MspInit(SD_HandleTypeDef *hsd)
         /* PC8 -> SDIO_D0 */
         GPIO_InitStruct.Pin       = GPIO_PIN_8;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull      = GPIO_PULLUP; // Важно для стабильности D0
+        GPIO_InitStruct.Pull      = GPIO_PULLUP;
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
         HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-        /* PC12 -> SDIO_CK (no pull on clock line) */
+        /* PC12 -> SDIO_CK */
         GPIO_InitStruct.Pin       = GPIO_PIN_12;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
         GPIO_InitStruct.Pull      = GPIO_NOPULL;
@@ -38,28 +38,15 @@ void HAL_SD_MspInit(SD_HandleTypeDef *hsd)
         /* PD2 -> SDIO_CMD */
         GPIO_InitStruct.Pin       = GPIO_PIN_2;
         GPIO_InitStruct.Mode      = GPIO_MODE_AF_PP;
-        GPIO_InitStruct.Pull      = GPIO_PULLUP; // Важно для стабильности CMD
+        GPIO_InitStruct.Pull      = GPIO_PULLUP;
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF12_SDIO;
         HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
         /*
-<<<<<<< HEAD
-         * Включаем Hardware Flow Control для предотвращения ошибок FIFO.
-         * Это помогает при высоких частотах шины.
-         */
-        hsd->Init.HardwareFlowControl = SDIO_HARDWARE_FLOW_CONTROL_ENABLE;
-
-        /*
          * SDIO global interrupt.
          * Priority 5 (lower than SysTick=0, higher than app tasks).
-=======
-         * SDIO global interrupt.
-         * Priority 5 (lower than SysTick=15, higher than app tasks).
->>>>>>> e0288c31b99ce296d5e80e4e68e4796860bf38b1
-         * Required by HAL_SD_IRQHandler to signal transfer complete
-         * even in polling mode (HAL internally uses SDIO->STA flags
-         * which are cleared via this handler path).
+         * HardwareFlowControl ЗАПРЕЩЁН на STM32F4 — errata ES0182 §2.7.1.
          */
         HAL_NVIC_SetPriority(SDIO_IRQn, 5, 0);
         HAL_NVIC_EnableIRQ(SDIO_IRQn);
@@ -81,6 +68,7 @@ void HAL_SD_MspDeInit(SD_HandleTypeDef *hsd)
 void HAL_UART_MspInit(UART_HandleTypeDef *huart)
 {
     GPIO_InitTypeDef GPIO_InitStruct = {0};
+
     if (huart->Instance == USART1)
     {
         __HAL_RCC_USART1_CLK_ENABLE();
@@ -102,6 +90,14 @@ void HAL_UART_MspInit(UART_HandleTypeDef *huart)
         GPIO_InitStruct.Speed     = GPIO_SPEED_FREQ_VERY_HIGH;
         GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
         HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+        /* USART2 RX interrupt (Air780E).
+         * Приоритет 6 — ниже SysTick(0), SDIO(5); выше app-задач.
+         * ISR заполняет g_air780_rxbuf, polling в драйвере читает из него. */
+        HAL_NVIC_SetPriority(USART2_IRQn, 6, 0);
+        HAL_NVIC_EnableIRQ(USART2_IRQn);
+        /* Включить прерывание RXNE на уровне периферии */
+        USART2->CR1 |= USART_CR1_RXNEIE;
     }
     else if (huart->Instance == USART3)
     {
@@ -136,6 +132,8 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef *huart)
     }
     else if (huart->Instance == USART2)
     {
+        USART2->CR1 &= ~USART_CR1_RXNEIE;
+        HAL_NVIC_DisableIRQ(USART2_IRQn);
         __HAL_RCC_USART2_CLK_DISABLE();
         HAL_GPIO_DeInit(GPIOA, GPIO_PIN_2 | GPIO_PIN_3);
     }

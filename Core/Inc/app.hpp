@@ -19,7 +19,8 @@
 #include "debug_uart.hpp"
 #include "ds3231.hpp"
 #include "modbus_rtu.hpp"
-#include "sim7020c.hpp"
+//#include "sim7020c.hpp"
+#include "air780e_tls.hpp"
 #include "sd_backup.hpp"
 #include "sensor_reader.hpp"
 #include "data_buffer.hpp"
@@ -70,6 +71,9 @@ private:
 
     // ---- Рабочий буфер JSON (разделяется между методами) ----
     char m_json[Config::JSON_BUFFER_SIZE]{};
+
+    // ---- SD - ошибка ----
+    bool m_sdOk = false;
 
     // ---- LED ----
     void ledOn();

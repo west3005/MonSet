@@ -101,16 +101,33 @@ uint16_t SIM7020C::readResponse(char* buf, uint16_t bsize, uint32_t timeout)
 
     uint16_t idx   = 0;
     uint32_t start = HAL_GetTick();
+    uint32_t lastByte = start;
     std::memset(buf, 0, bsize);
 
-    while ((HAL_GetTick() - start) < timeout && idx < (uint16_t)(bsize - 1)) {
+    while (idx < (uint16_t)(bsize - 1))
+    {
         uint8_t ch;
-        if (HAL_UART_Receive(m_uart, &ch, 1, 10) == HAL_OK) {
+        if (HAL_UART_Receive(m_uart, &ch, 1, 5) == HAL_OK) {
             buf[idx++] = static_cast<char>(ch);
+            lastByte = HAL_GetTick();
+
             if (idx >= 4) {
-                if (std::strstr(buf, "OK\r\n") || std::strstr(buf, "ERROR")) break;
+                if (std::strstr(buf, "OK\r\n") ||
+                    std::strstr(buf, "ERROR\r\n") ||
+                    std::strstr(buf, "ERROR"))
+                    break;
             }
+        } else {
+            // Нет байта 5 мс — проверяем условия выхода
+            uint32_t now = HAL_GetTick();
+
+            // Если уже получили данные и тишина >30 мс — конец ответа
+            if (idx > 0 && (now - lastByte) >= 30) break;
+
+            // Общий таймаут
+            if ((now - start) >= timeout) break;
         }
+        IWDG->KR = 0xAAAA;
     }
 
     buf[idx] = '\0';
@@ -124,20 +141,30 @@ uint16_t SIM7020C::waitFor(char* buf, uint16_t bsize,
 
     uint16_t idx   = 0;
     uint32_t start = HAL_GetTick();
+    uint32_t lastByte = start;
     std::memset(buf, 0, bsize);
 
-    while ((HAL_GetTick() - start) < timeout && idx < (uint16_t)(bsize - 1)) {
+    while (idx < (uint16_t)(bsize - 1))
+    {
         uint8_t ch;
-        if (HAL_UART_Receive(m_uart, &ch, 1, 10) == HAL_OK) {
+        if (HAL_UART_Receive(m_uart, &ch, 1, 5) == HAL_OK) {
             buf[idx++] = static_cast<char>(ch);
-            if (std::strstr(buf, expected) || std::strstr(buf, "ERROR")) break;
+            lastByte = HAL_GetTick();
+
+            if (std::strstr(buf, expected) ||
+                std::strstr(buf, "ERROR"))
+                break;
+        } else {
+            uint32_t now = HAL_GetTick();
+            if (idx > 0 && (now - lastByte) >= 30) break;
+            if ((now - start) >= timeout) break;
         }
+        IWDG->KR = 0xAAAA;
     }
 
     buf[idx] = '\0';
     return idx;
 }
-
 GsmStatus SIM7020C::sendCommand(const char* cmd,
                                  char*       resp,
                                  uint16_t    rsize,
@@ -183,30 +210,41 @@ bool SIM7020C::waitRdy(uint32_t timeoutMs)
     return false;
 }
 
-void SIM7020C::powerOn()
-{
+void SIM7020C::powerOn() {
     DBG.info("SIM7020C: включение питания...");
     HAL_GPIO_WritePin(m_pwrPort, m_pwrPin, GPIO_PIN_SET);
-    HAL_Delay(100);
+    HAL_Delay(300);
 
-    // PWRKEY: импульс LOW ≥500 мс для включения
+    // Если модем уже включён (VDD_EXT = HIGH) — не трогать PWRKEY!
+    GPIO_PinState status = HAL_GPIO_ReadPin(PIN_CELL_STATUS_PORT, PIN_CELL_STATUS_PIN);
+    if (status == GPIO_PIN_SET) {
+        DBG.info("SIM7020C: уже включён (STATUS=HIGH), PWRKEY пропускаем");
+        return;
+    }
+
+    // Модем выключен — включаем
+    DBG.info("SIM7020C: подача PWRKEY...");
     HAL_GPIO_WritePin(PIN_CELL_PWRKEY_PORT, PIN_CELL_PWRKEY_PIN, GPIO_PIN_RESET);
-    HAL_Delay(1200);
+    HAL_Delay(1200);  // Air780E требует ≥ 1000 мс
     HAL_GPIO_WritePin(PIN_CELL_PWRKEY_PORT, PIN_CELL_PWRKEY_PIN, GPIO_PIN_SET);
 
     DBG.info("SIM7020C: ожидание RDY...");
-    if (!waitRdy(Config::SIM7020_BOOT_MS)) {
+    if (!waitRdy(12000)) {
         DBG.warn("SIM7020C: RDY не получен — продолжаем с таймаутом");
     }
 }
 
-void SIM7020C::powerOff()
-{
+void SIM7020C::powerOff() {
     DBG.info("SIM7020C: выключение...");
-    // Корректное выключение через AT-команду
+    GPIO_PinState status = HAL_GPIO_ReadPin(PIN_CELL_STATUS_PORT, PIN_CELL_STATUS_PIN);
+    if (status == GPIO_PIN_RESET) {
+        DBG.info("SIM7020C: уже выключен, пропускаем");
+        HAL_GPIO_WritePin(m_pwrPort, m_pwrPin, GPIO_PIN_RESET);
+        return;
+    }
     char r[64];
     sendCommand("+CPOWD=1", r, sizeof(r), 3000);
-    HAL_Delay(500);
+    HAL_Delay(2000);
     HAL_GPIO_WritePin(m_pwrPort, m_pwrPin, GPIO_PIN_RESET);
 }
 
@@ -248,15 +286,19 @@ GsmStatus SIM7020C::activatePdn()
 
 GsmStatus SIM7020C::init()
 {
-    char r[256];
+	 char r[256];
 
-    DBG.info("SIM7020C: проверка связи...");
-    bool alive = false;
-    for (uint8_t i = 0; i < 10 && !alive; i++) {
-        if (sendCommand("", r, sizeof(r), 2000) == GsmStatus::Ok) alive = true;
-        else HAL_Delay(500);
-        IWDG->KR = 0xAAAA;
-    }
+	    // Сброс UART RX — очистить мусор накопившийся при старте модема
+	    __HAL_UART_FLUSH_DRREGISTER(m_uart);
+	    HAL_Delay(100);
+
+	    DBG.info("SIM7020C: проверка связи...");
+	    bool alive = false;
+	    for (uint8_t i = 0; i < 10 && !alive; i++) {
+	        if (sendCommand("", r, sizeof(r), 2000) == GsmStatus::Ok) alive = true;
+	        else HAL_Delay(500);
+	        IWDG->KR = 0xAAAA;
+	    }
     if (!alive) {
         DBG.error("SIM7020C: нет ответа на AT");
         return GsmStatus::Timeout;
