@@ -247,29 +247,17 @@ GsmStatus Air780E::activatePdn()
     sendCommand(cmd, r, sizeof(r), Config::SIM7020_CMD_TIMEOUT_MS);
 
     // Активировать PDP контекст
-    // Если уже активен — ERROR/CME ERROR, это нормально, продолжаем
     sendCommand("+CGACT=1,1", r, sizeof(r), Config::SIM7020_PDN_TIMEOUT_MS);
-    if (std::strstr(r, "ERROR") && !std::strstr(r, "OK")) {
-        // Проверим что IP всё равно есть
-        sendCommand("+CGPADDR=1", r, sizeof(r), Config::SIM7020_CMD_TIMEOUT_MS);
-        if (!std::strstr(r, "+CGPADDR:")) {
-            DBG.error("Air780E: нет IP после CGACT");
-            return GsmStatus::PdnErr;
-        }
-    }
 
-    // AT+NETOPEN — открыть TCP стек
-    // ERROR = уже открыт, это нормально
-    sendCommand("+NETOPEN", r, sizeof(r), 10000);
-    // Не проверяем — ERROR здесь допустим
-
-    // Получить IP для отладки
+    // Проверить IP
     sendCommand("+CGPADDR=1", r, sizeof(r), Config::SIM7020_CMD_TIMEOUT_MS);
+    if (!std::strstr(r, "+CGPADDR:")) {
+        DBG.error("Air780E: нет IP");
+        return GsmStatus::PdnErr;
+    }
     DBG.info("Air780E: PDN UP — %s", r);
-
-    return GsmStatus::Ok;  // всегда OK если дошли сюда
+    return GsmStatus::Ok;
 }
-
 GsmStatus Air780E::init()
 {
     char r[256];
@@ -380,87 +368,104 @@ uint16_t Air780E::httpPost(const char* url, const char* json, uint16_t len)
     if (!url || !json || len == 0) return 0;
 
     const RuntimeConfig& c = Cfg();
-    char r[512], cmd[256];
+    char r[512], cmd[512];
+    bool isHttps = (std::strncmp(url, "https://", 8) == 0);
 
-    // 1. Инициализация HTTP-сервиса
-    sendCommand("+HTTPTERM", r, sizeof(r), 2000); // сброс предыдущей сессии
+    // 1. Сброс предыдущей сессии
+    sendCommand("+HTTPTERM", r, sizeof(r), 2000);
     HAL_Delay(200);
 
-    if (sendCommand("+HTTPINIT", r, sizeof(r),
-                    Config::SIM7020_CMD_TIMEOUT_MS) != GsmStatus::Ok) {
-        DBG.error("Air780E HTTP: HTTPINIT fail");
+    // 2. SSL контекст 0 — только для HTTPS
+    //    AT+CSSLCFG — правильный способ настройки SSL на Air780E
+    if (isHttps) {
+        // TLS 1.2
+        sendCommand("+CSSLCFG=\"sslversion\",0,4",   r, sizeof(r), 2000);
+        // Без проверки сертификата (0 = no auth)
+        sendCommand("+CSSLCFG=\"authmode\",0,0",      r, sizeof(r), 2000);
+        // Игнорировать несовпадение времени в сертификате
+        sendCommand("+CSSLCFG=\"ignorertctime\",0,1", r, sizeof(r), 2000);
+    }
+
+    // 3. Инит HTTP клиента
+    if (sendCommand("+HTTPINIT", r, sizeof(r), 5000) != GsmStatus::Ok) {
+        DBG.error("Air780E: HTTPINIT failed");
         return 0;
     }
 
-    // 2. Параметры
-    // PDP контекст
-    sendCommand("+HTTPPARA=\"CID\",1", r, sizeof(r),
-                Config::SIM7020_CMD_TIMEOUT_MS);
+    // 4. Привязать PDP контекст 1
+    sendCommand("+HTTPPARA=\"CID\",1", r, sizeof(r), 2000);
 
-    // URL
+    // 5. Привязать SSL контекст — значение СТРОКА "0", не число!
+    if (isHttps) {
+        sendCommand("+HTTPPARA=\"SSLCFG\",\"0\"", r, sizeof(r), 2000);
+        DBG.info("Air780E: SSLCFG resp=[%s]", r);
+    }
+
+    // 6. URL
     std::snprintf(cmd, sizeof(cmd), "+HTTPPARA=\"URL\",\"%s\"", url);
-    if (sendCommand(cmd, r, sizeof(r),
-                    Config::SIM7020_CMD_TIMEOUT_MS) != GsmStatus::Ok) {
-        DBG.error("Air780E HTTP: HTTPPARA URL fail");
+    if (sendCommand(cmd, r, sizeof(r), 2000) != GsmStatus::Ok) {
+        DBG.error("Air780E: HTTPPARA URL failed");
         sendCommand("+HTTPTERM", r, sizeof(r), 2000);
         return 0;
     }
 
-    // Content-Type
-    sendCommand("+HTTPPARA=\"CONTENT\",\"application/json\"",
-                r, sizeof(r), Config::SIM7020_CMD_TIMEOUT_MS);
+    // 7. Content-Type
+    sendCommand("+HTTPPARA=\"CONTENT\",\"application/json\"", r, sizeof(r), 2000);
 
-    // Authorization (если задан)
+    // 8. Authorization header (если задан)
     if (c.server_auth_b64[0]) {
         std::snprintf(cmd, sizeof(cmd),
-                      "+HTTPPARA=\"USERDATA\",\"Authorization: Basic %s\"",
-                      c.server_auth_b64);
-        sendCommand(cmd, r, sizeof(r), Config::SIM7020_CMD_TIMEOUT_MS);
+            "+HTTPPARA=\"USERDATA\",\"Authorization: Basic %s\"",
+            c.server_auth_b64);
+        sendCommand(cmd, r, sizeof(r), 2000);
     }
 
-    // 3. Ввод тела запроса: AT+HTTPDATA=<size>,<timeout_ms>
-    std::snprintf(cmd, sizeof(cmd), "+HTTPDATA=%u,10000", (unsigned)len);
-    sendRaw("AT", 2);
+    // 9. AT+HTTPDATA=<len>,<timeout_input_ms>
+    //    Модем должен ответить "DOWNLOAD" → затем шлём тело
     {
         char fullCmd[64];
-        std::snprintf(fullCmd, sizeof(fullCmd), "AT+HTTPDATA=%u,10000\r\n", (unsigned)len);
-        __HAL_UART_FLUSH_DRREGISTER(m_uart);
+        std::snprintf(fullCmd, sizeof(fullCmd),
+                      "AT+HTTPDATA=%u,10000\r\n", (unsigned)len);
+        g_air780_rxbuf.clear();
         sendRaw(fullCmd, (uint16_t)std::strlen(fullCmd));
     }
-
-    // Ждём "DOWNLOAD" приглашение
     waitFor(r, sizeof(r), "DOWNLOAD", 5000);
     if (!std::strstr(r, "DOWNLOAD")) {
-        DBG.error("Air780E HTTP: нет DOWNLOAD prompt (resp=%s)", r);
+        DBG.error("Air780E: нет DOWNLOAD, resp=[%s]", r);
         sendCommand("+HTTPTERM", r, sizeof(r), 2000);
         return 0;
     }
 
-    // Отправить тело JSON
+    // 10. Тело запроса → после тишины модем пришлёт OK
+    g_air780_rxbuf.clear();
     sendRaw(json, len);
-    // Ждём OK после ввода данных
     readResponse(r, sizeof(r), 3000);
+    DBG.info("Air780E: HTTPDATA body resp=[%s]", r);
 
-    // 4. POST запрос: AT+HTTPACTION=1
-    // Ответ: +HTTPACTION: 1,<http_code>,<data_len>
-    __HAL_UART_FLUSH_DRREGISTER(m_uart);
+    // 11. AT+HTTPACTION=1 (POST)
+    //     Ответ асинхронный URC: +HTTPACTION: 1,<code>,<len>
+    //     HTTPS требует времени на TLS handshake (~5-15 с)
+    g_air780_rxbuf.clear();
     sendRaw("AT+HTTPACTION=1\r\n", 17);
-    waitFor(r, sizeof(r), "+HTTPACTION:", Config::SIM7020_TCP_TIMEOUT_MS);
+
+    uint32_t timeout = isHttps
+        ? Config::SIM7020_TLS_TIMEOUT_MS   // 40 сек
+        : Config::SIM7020_TCP_TIMEOUT_MS;  // 20 сек
+    waitFor(r, sizeof(r), "+HTTPACTION:", timeout);
+    DBG.info("Air780E: HTTPACTION resp=[%s]", r);
 
     uint16_t httpCode = 0;
-    {
-        const char* p = std::strstr(r, "+HTTPACTION:");
-        if (p) {
-            unsigned method = 0, code = 0, dlen = 0;
-            std::sscanf(p, "+HTTPACTION: %u,%u,%u", &method, &code, &dlen);
-            httpCode = (uint16_t)code;
-        }
+    const char* p = std::strstr(r, "+HTTPACTION:");
+    if (p) {
+        unsigned method = 0, code = 0, dlen = 0;
+        std::sscanf(p, "+HTTPACTION: %u,%u,%u", &method, &code, &dlen);
+        httpCode = (uint16_t)code;
+    } else {
+        DBG.error("Air780E: +HTTPACTION не получен (timeout)");
     }
-    DBG.info("Air780E HTTP: код ответа=%u", httpCode);
 
-    // 5. Завершить сессию
+    DBG.info("Air780E HTTP%s: код=%u", isHttps ? "S" : "", httpCode);
     sendCommand("+HTTPTERM", r, sizeof(r), 2000);
-
     return httpCode;
 }
 

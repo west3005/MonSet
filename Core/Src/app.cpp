@@ -456,20 +456,9 @@ int App::postViaGsm(const char* json, uint16_t len)
         return -1;
     }
 
-    const char* url = Cfg().server_url;
-
-    if (startsWith(url, "https://")) {
-        // Транспорт: mbedTLS поверх Air780E TCP socket
-        Air780eTls tls(m_gsm, Config::SIM7020_TLS_TIMEOUT_MS);
-        code = tls.postJson(url, Cfg().server_auth_b64, json, len);
-        DBG.info("GSM HTTPS: code=%d", code);
-    } else if (startsWith(url, "http://")) {
-        // Plain HTTP через AT+HTTPINIT
-        code = (int)m_gsm.httpPost(url, json, len);
-        DBG.info("GSM HTTP: code=%d", code);
-    } else {
-        DBG.error("GSM: неизвестная схема URL");
-    }
+    // httpPost теперь поддерживает https:// через встроенный SSL модема
+    code = (int)m_gsm.httpPost(Cfg().server_url, json, len);
+    DBG.info("GSM HTTP(S): code=%d", code);
 
     m_gsm.disconnect();
     m_gsm.powerOff();
@@ -787,9 +776,8 @@ void App::retransmitBackup()
             // GSM уже инициализирован в transmitBuffer() — только отправляем
             const char* url = Cfg().server_url;
             if (startsWith(url, "https://")) {
-                Air780eTls tls(m_gsm, Config::SIM7020_TLS_TIMEOUT_MS);
-                http = tls.postJson(url, Cfg().server_auth_b64,
-                                    m_json, (uint16_t)std::strlen(m_json));
+            	http = (int)m_gsm.httpPost(Cfg().server_url, m_json,
+            	                            (uint16_t)std::strlen(m_json));
                 DBG.info("GSM HTTPS: code=%d", http);
             } else if (startsWith(url, "http://")) {
                 http = (int)m_gsm.httpPost(url, m_json,

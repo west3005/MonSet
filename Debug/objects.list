@@ -1,5 +1,4 @@
 "./Core/Src/air780e.o"
-"./Core/Src/air780e_tls.o"
 "./Core/Src/app.o"
 "./Core/Src/cfg_uart_bridge.o"
 "./Core/Src/data_buffer.o"
